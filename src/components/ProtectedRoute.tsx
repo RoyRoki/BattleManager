@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ROUTES } from '../utils/constants';
 
@@ -12,7 +12,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requireAuth = false,
 }) => {
-  const { user, isLoading } = useAuth();
+  const { user, isAdmin, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -22,16 +23,26 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
+  // If admin tries to access regular user routes, redirect to admin dashboard
+  if (isAdmin && !location.pathname.startsWith('/admin') && location.pathname !== ROUTES.LOGIN) {
+    return <Navigate to={ROUTES.ADMIN_DASHBOARD} replace />;
+  }
+
   // If route requires auth but user is not logged in, redirect to login
-  if (requireAuth && !user) {
+  if (requireAuth && !user && !isAdmin) {
     return <Navigate to={ROUTES.LOGIN} replace />;
   }
 
-  // If user is logged in and trying to access login page, redirect to home
-  if (!requireAuth && user) {
+  // If user is logged in and trying to access login page, redirect appropriately
+  // Only redirect if we're on the login page, not on other public pages
+  if (location.pathname === ROUTES.LOGIN && (user || isAdmin)) {
+    if (isAdmin) {
+      return <Navigate to={ROUTES.ADMIN_DASHBOARD} replace />;
+    }
     return <Navigate to={ROUTES.HOME} replace />;
   }
 
+  // For all other routes, just render the children
   return <>{children}</>;
 };
 

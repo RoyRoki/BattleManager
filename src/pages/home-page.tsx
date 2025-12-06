@@ -1,28 +1,62 @@
 import React from 'react';
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, query, where, orderBy } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { firestore } from '../services/firebaseService';
 import { TournamentCard } from '../components/tournament-card';
 import { Tournament } from '../types';
+import { Banner } from '../types/Banner';
 import { useAuth } from '../contexts/AuthContext';
-import { LoginPage } from '../features/auth/presentation/views/login-page';
+import { BannerCarousel } from '../components/banner-carousel';
 import { motion } from 'framer-motion';
+import { HiCalendar } from 'react-icons/hi';
 
 export const HomePage: React.FC = () => {
   const { user, isLoading } = useAuth();
+  
+  // Query tournaments - filter server-side, sort client-side to avoid index requirement
   const [tournaments, loading, error] = useCollection(
     query(
       collection(firestore, 'tournaments'),
-      where('status', 'in', ['upcoming', 'live']),
-      orderBy('start_time', 'asc')
+      where('status', 'in', ['upcoming', 'live'])
     )
   ) as unknown as [{ docs: any[] } | null, boolean, Error | undefined];
 
-  // Show login page if user is not authenticated
-  if (!isLoading && !user) {
-    return <LoginPage />;
-  }
+  // Query banners - filter active banners server-side
+  const [banners, bannersLoading, bannersError] = useCollection(
+    query(
+      collection(firestore, 'banners'),
+      where('is_active', '==', true)
+    )
+  );
 
+  // Convert banners to Banner type (already filtered by is_active on server)
+  // Sort by order field client-side
+  const activeBanners: Banner[] =
+    banners?.docs
+      .map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          image_url: data.image_url || '',
+          title: data.title,
+          subtitle: data.subtitle,
+          tournament_id: data.tournament_id,
+          link_url: data.link_url,
+          is_active: true, // Already filtered by query
+          order: data.order !== undefined ? data.order : 0,
+          created_at:
+            data.created_at instanceof Date
+              ? data.created_at
+              : (data.created_at as any)?.toDate?.() || new Date(),
+          updated_at:
+            data.updated_at instanceof Date
+              ? data.updated_at
+              : (data.updated_at as any)?.toDate?.() || new Date(),
+        } as Banner;
+      })
+      .sort((a, b) => a.order - b.order) || [];
+
+  // Show loading state while checking auth or loading tournaments
   if (loading || isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-bg">
@@ -36,18 +70,38 @@ export const HomePage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen bg-bg">
-        <div className="text-center">
-          <div className="text-accent text-xl font-heading mb-2">Error loading tournaments</div>
-          <p className="text-gray-400">Please try again later</p>
+      <div className="min-h-screen bg-bg pb-20">
+        {/* Still show banners even if tournaments fail */}
+        {!bannersLoading && activeBanners.length > 0 && (
+          <div className="w-full mt-16 mb-6">
+            <BannerCarousel banners={activeBanners} />
+          </div>
+        )}
+
+        <div className="container mx-auto px-4 py-6">
+
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="text-accent text-xl font-heading mb-2">Error loading tournaments</div>
+              <p className="text-gray-400">Please try again later</p>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-bg pb-20 pt-20">
+    <div className="min-h-screen bg-bg pb-20">
+      {/* Hero Banner Carousel - Full Width, starts right after header */}
+      {activeBanners.length > 0 && (
+        <div className="w-full mt-16 mb-6">
+          <BannerCarousel banners={activeBanners} />
+        </div>
+      )}
+
       <div className="container mx-auto px-4 py-6">
+
         <motion.h1
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -58,48 +112,47 @@ export const HomePage: React.FC = () => {
 
         {tournaments && tournaments.docs.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {tournaments.docs.map((doc: any, index: number) => {
-              const data = doc.data();
-              const tournament = {
-                id: doc.id,
-                ...data,
-                start_time:
-                  data.start_time instanceof Date
-                    ? data.start_time
-                    : (data.start_time as any)?.toDate?.() || new Date(),
-                reveal_time:
-                  data.reveal_time instanceof Date
-                    ? data.reveal_time
-                    : (data.reveal_time as any)?.toDate?.() || undefined,
-                created_at:
-                  data.created_at instanceof Date
-                    ? data.created_at
-                    : (data.created_at as any)?.toDate?.() || new Date(),
-                updated_at:
-                  data.updated_at instanceof Date
-                    ? data.updated_at
-                    : (data.updated_at as any)?.toDate?.() || new Date(),
-              } as Tournament;
-
-              return (
+            {tournaments.docs
+              .map((doc: any) => {
+                const data = doc.data();
+                return {
+                  id: doc.id,
+                  ...data,
+                  start_time:
+                    data.start_time instanceof Date
+                      ? data.start_time
+                      : (data.start_time as any)?.toDate?.() || new Date(),
+                  reveal_time:
+                    data.reveal_time instanceof Date
+                      ? data.reveal_time
+                      : (data.reveal_time as any)?.toDate?.() || undefined,
+                  created_at:
+                    data.created_at instanceof Date
+                      ? data.created_at
+                      : (data.created_at as any)?.toDate?.() || new Date(),
+                  updated_at:
+                    data.updated_at instanceof Date
+                      ? data.updated_at
+                      : (data.updated_at as any)?.toDate?.() || new Date(),
+                } as Tournament;
+              })
+              .sort((a, b) => a.start_time.getTime() - b.start_time.getTime()) // Sort client-side
+              .map((tournament, index: number) => (
                 <motion.div
-                  key={doc.id}
+                  key={tournament.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
                 >
                   <TournamentCard tournament={tournament} />
                 </motion.div>
-              );
-            })}
+              ))}
           </div>
         ) : (
           <div className="text-center py-12">
             <div className="inline-block mb-4">
-              <div className="w-16 h-16 bg-primary bg-opacity-10 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+              <div className="w-20 h-20 bg-bg-secondary border-2 border-primary/20 rounded-full flex items-center justify-center">
+                <HiCalendar className="w-10 h-10 text-primary/60" />
               </div>
             </div>
             <p className="text-gray-400 text-lg mb-2">No tournaments available at the moment</p>

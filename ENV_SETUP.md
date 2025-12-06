@@ -17,6 +17,9 @@ VITE_FIREBASE_DATABASE_URL=https://battlemanager-2026-default-rtdb.asia-southeas
 VITE_CLOUDINARY_CLOUD_NAME=dtgvwk7ss
 VITE_CLOUDINARY_API_KEY=433532155216152
 VITE_CLOUDINARY_API_SECRET=EY-pdRZVnWRPpH4Mi5RBSNNKi8k
+# Upload Preset (create an unsigned preset in Cloudinary Dashboard > Settings > Upload)
+# Default: battlemanager_preset (can be changed if you use a different preset name)
+VITE_CLOUDINARY_UPLOAD_PRESET=battlemanager_preset
 
 # Admin Configuration
 VITE_ADMIN_EMAIL=admin@battlemanager.com

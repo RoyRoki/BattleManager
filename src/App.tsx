@@ -51,6 +51,16 @@ const UserManagement = lazy(() =>
     default: module.UserManagement,
   }))
 );
+const AdminSettings = lazy(() =>
+  import('./pages/admin/admin-settings').then((module) => ({
+    default: module.AdminSettings,
+  }))
+);
+const AdminNotifications = lazy(() =>
+  import('./pages/admin/admin-notifications').then((module) => ({
+    default: module.AdminNotifications,
+  }))
+);
 const LoginPage = lazy(() =>
   import('./features/auth').then((module) => ({
     default: module.LoginPage,
@@ -157,6 +167,22 @@ function App() {
                       element={
                         <AdminAuth>
                           <UserManagement />
+                        </AdminAuth>
+                      }
+                    />
+                    <Route
+                      path={ROUTES.ADMIN_SETTINGS}
+                      element={
+                        <AdminAuth>
+                          <AdminSettings />
+                        </AdminAuth>
+                      }
+                    />
+                    <Route
+                      path={ROUTES.ADMIN_NOTIFICATIONS}
+                      element={
+                        <AdminAuth>
+                          <AdminNotifications />
                         </AdminAuth>
                       }
                     />

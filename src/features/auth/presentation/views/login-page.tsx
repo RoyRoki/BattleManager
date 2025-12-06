@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { HiShieldCheck, HiPhone, HiKey, HiUser, HiIdentification } from 'react-icons/hi';
+import { HiShieldCheck, HiPhone, HiKey, HiUser, HiIdentification, HiMail } from 'react-icons/hi';
 import { useLoginViewModel } from '../viewmodels/useLoginViewModel';
 
 export const LoginPage: React.FC = () => {
@@ -14,13 +14,21 @@ export const LoginPage: React.FC = () => {
     isCheckingUser,
     isLoadingVerification,
     attempts,
+    isAdminMode,
+    adminEmail,
+    adminPassword,
+    isAdminLoading,
     setMobileNumber,
     setEnteredOTP,
     setName,
     setFfId,
+    setAdminEmail,
+    setAdminPassword,
+    toggleAdminMode,
     handleMobileSubmit,
     handleSignupSubmit,
     handleOTPSubmit,
+    handleAdminLogin,
     handleBack,
   } = useLoginViewModel();
 
@@ -72,9 +80,24 @@ export const LoginPage: React.FC = () => {
                 ? 'Enter your mobile number to get started'
                 : step === 'signup'
                 ? 'Create your account'
+                : step === 'admin'
+                ? 'Admin Login'
                 : 'Enter the OTP sent to your mobile'}
             </p>
           </div>
+
+          {/* Admin/User Mode Toggle */}
+          {step === 'mobile' && (
+            <div className="mb-6 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={toggleAdminMode}
+                className="text-xs text-gray-400 hover:text-primary transition"
+              >
+                {isAdminMode ? 'Switch to User Login' : 'Admin Login'}
+              </button>
+            </div>
+          )}
 
           {/* Mobile Number Form */}
           {step === 'mobile' && (
@@ -247,6 +270,76 @@ export const LoginPage: React.FC = () => {
                   {isLoadingVerification ? 'Verifying...' : 'Verify & Login'}
                 </button>
               </div>
+            </form>
+          )}
+
+          {/* Admin Login Form */}
+          {step === 'admin' && (
+            <form onSubmit={handleAdminLogin} className="space-y-6">
+              <div>
+                <label className="block text-sm font-body text-gray-300 mb-2">
+                  Email
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <HiMail className="text-gray-400" />
+                  </div>
+                  <input
+                    type="email"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="admin@example.com"
+                    className="w-full bg-bg border border-gray-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-primary transition font-body"
+                    required
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-body text-gray-300 mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <HiKey className="text-gray-400" />
+                  </div>
+                  <input
+                    type="password"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full bg-bg border border-gray-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-primary transition font-body"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isAdminLoading || !adminEmail || !adminPassword}
+                className="w-full bg-accent text-white py-3 rounded-lg font-heading hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isAdminLoading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Logging in...
+                  </>
+                ) : (
+                  <>
+                    <HiShieldCheck className="text-xl" />
+                    Login as Admin
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleBack}
+                className="w-full bg-bg-tertiary text-white py-3 rounded-lg font-body hover:bg-opacity-80 transition"
+              >
+                Back to User Login
+              </button>
             </form>
           )}
 

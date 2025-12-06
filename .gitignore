@@ -29,6 +29,12 @@ dist-ssr
 .env.production.local
 .env.development.local
 
+# Firebase service account keys (sensitive - never commit!)
+serviceAccountKey.json
+service-account-key.json
+firebase-service-account.json
+*-firebase-adminsdk-*.json
+
 # Testing
 coverage
 .nyc_output

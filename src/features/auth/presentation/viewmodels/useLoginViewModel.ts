@@ -9,7 +9,7 @@ import { SignupData } from '../../domain/entities/User';
 import { mobileSchema, userNameSchema, ffIdSchema } from '../../../../utils/validations';
 import toast from 'react-hot-toast';
 
-export type LoginStep = 'mobile' | 'signup' | 'otp';
+export type LoginStep = 'mobile' | 'signup' | 'otp' | 'admin';
 
 export interface LoginViewModelState {
   step: LoginStep;
@@ -22,6 +22,10 @@ export interface LoginViewModelState {
   isCheckingUser: boolean;
   isLoadingVerification: boolean;
   attempts: number;
+  isAdminMode: boolean;
+  adminEmail: string;
+  adminPassword: string;
+  isAdminLoading: boolean;
 }
 
 export interface LoginViewModelHandlers {
@@ -29,16 +33,20 @@ export interface LoginViewModelHandlers {
   setEnteredOTP: (value: string) => void;
   setName: (value: string) => void;
   setFfId: (value: string) => void;
+  setAdminEmail: (value: string) => void;
+  setAdminPassword: (value: string) => void;
+  toggleAdminMode: () => void;
   handleMobileSubmit: (e?: React.FormEvent) => Promise<void>;
   handleSignupSubmit: (e: React.FormEvent) => Promise<void>;
   handleOTPSubmit: (e: React.FormEvent) => Promise<void>;
+  handleAdminLogin: (e: React.FormEvent) => Promise<void>;
   handleBack: () => void;
   reset: () => void;
 }
 
 export const useLoginViewModel = (): LoginViewModelState & LoginViewModelHandlers => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, adminLogin } = useAuth();
 
   // Initialize repository and use cases using factory
   // Using useMemo to avoid recreating on every render
@@ -58,6 +66,10 @@ export const useLoginViewModel = (): LoginViewModelState & LoginViewModelHandler
   const [isCheckingUser, setIsCheckingUser] = useState(false);
   const [isLoadingVerification, setIsLoadingVerification] = useState(false);
   const [attempts, setAttempts] = useState(0);
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [isAdminLoading, setIsAdminLoading] = useState(false);
 
   const handleMobileSubmit = useCallback(async (e?: React.FormEvent) => {
     if (e) {
@@ -185,11 +197,51 @@ export const useLoginViewModel = (): LoginViewModelState & LoginViewModelHandler
     }
   }, [enteredOTP, mobileNumber, isNewUser, name, ffId, verifyOTPUseCase, login, navigate]);
 
+  const toggleAdminMode = useCallback(() => {
+    setIsAdminMode((prev) => !prev);
+    if (!isAdminMode) {
+      setStep('admin');
+    } else {
+      setStep('mobile');
+      setAdminEmail('');
+      setAdminPassword('');
+    }
+  }, [isAdminMode]);
+
+  const handleAdminLogin = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log('useLoginViewModel: handleAdminLogin called');
+
+    if (!adminEmail || !adminPassword) {
+      toast.error('Please enter both email and password');
+      return;
+    }
+
+    setIsAdminLoading(true);
+    try {
+      await adminLogin(adminEmail, adminPassword);
+      console.log('useLoginViewModel: Admin login successful');
+      toast.success('Admin login successful!');
+      navigate('/admin');
+      reset();
+    } catch (error: any) {
+      console.error('useLoginViewModel: Admin login error:', error);
+      toast.error(error.message || 'Admin login failed. Please check your credentials.');
+    } finally {
+      setIsAdminLoading(false);
+    }
+  }, [adminEmail, adminPassword, adminLogin, navigate]);
+
   const handleBack = useCallback(() => {
     if (step === 'signup') {
       setStep('mobile');
       setName('');
       setFfId('');
+    } else if (step === 'admin') {
+      setStep('mobile');
+      setAdminEmail('');
+      setAdminPassword('');
+      setIsAdminMode(false);
     } else {
       setStep('mobile');
       setEnteredOTP('');
@@ -209,6 +261,10 @@ export const useLoginViewModel = (): LoginViewModelState & LoginViewModelHandler
     setIsLoading(false);
     setIsCheckingUser(false);
     setIsLoadingVerification(false);
+    setIsAdminMode(false);
+    setAdminEmail('');
+    setAdminPassword('');
+    setIsAdminLoading(false);
   }, []);
 
   return {
@@ -223,14 +279,22 @@ export const useLoginViewModel = (): LoginViewModelState & LoginViewModelHandler
     isCheckingUser,
     isLoadingVerification,
     attempts,
+    isAdminMode,
+    adminEmail,
+    adminPassword,
+    isAdminLoading,
     // Handlers
     setMobileNumber,
     setEnteredOTP,
     setName,
     setFfId,
+    setAdminEmail,
+    setAdminPassword,
+    toggleAdminMode,
     handleMobileSubmit,
     handleSignupSubmit,
     handleOTPSubmit,
+    handleAdminLogin,
     handleBack,
     reset,
   };

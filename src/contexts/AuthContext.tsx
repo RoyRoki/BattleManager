@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
+import { User as FirebaseUser, onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, firestore } from '../services/firebaseService';
 import { User } from '../types';
@@ -13,6 +13,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isLoading: boolean;
   login: (mobileNo: string) => Promise<void>;
+  adminLogin: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -42,6 +43,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const fetchUserData = async (mobileNo: string) => {
     try {
+      // Skip Firestore lookup for Firebase Auth UIDs (admin users)
+      // Admin users use Firebase Auth, not the users collection
+      // The users collection uses mobile numbers as document IDs
+      // If mobileNo looks like a Firebase UID (long alphanumeric), skip
+      if (mobileNo.length > 20 || !/^\d+$/.test(mobileNo)) {
+        // This is likely a Firebase Auth UID, not a mobile number
+        // Admin users don't have documents in the users collection
+        console.log('Skipping Firestore lookup for Firebase Auth UID (admin user)');
+        return null;
+      }
+
       const userDoc = await getDoc(doc(firestore, 'users', mobileNo));
       if (userDoc.exists()) {
         const userData = userDoc.data() as User;
@@ -73,13 +85,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const checkAdminStatus = async (firebaseUser: FirebaseUser) => {
+  const checkAdminStatus = async (firebaseUser: FirebaseUser, forceRefresh: boolean = false) => {
     try {
-      const idTokenResult = await firebaseUser.getIdTokenResult();
-      setIsAdmin(idTokenResult.claims.role === 'admin');
-    } catch (error) {
+      // Get token result - force refresh if requested
+      // On page refresh, we first try cached token, then force refresh if needed
+      const idTokenResult = await firebaseUser.getIdTokenResult(forceRefresh);
+      const isAdminRole = idTokenResult.claims.role === 'admin';
+      setIsAdmin(isAdminRole);
+      
+      console.log(`Admin status check (${forceRefresh ? 'forced refresh' : 'cached token'}):`, {
+        isAdmin: isAdminRole,
+        role: idTokenResult.claims.role || 'none',
+        tokenIssuedAt: new Date(idTokenResult.issuedAtTime),
+        email: firebaseUser.email,
+      });
+      
+      return isAdminRole;
+    } catch (error: any) {
       console.error('Error checking admin status:', error);
-      setIsAdmin(false);
+      // Don't immediately set isAdmin to false on error - might be temporary
+      // Only set to false if it's a clear auth error
+      if (error.code === 'auth/user-token-expired' || error.code === 'auth/user-disabled') {
+        setIsAdmin(false);
+      }
+      return false;
     }
   };
 
@@ -129,17 +158,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             
             setFirebaseUser(firebaseUser);
             if (firebaseUser) {
-              await checkAdminStatus(firebaseUser);
-              // For admin users, mobile_no might be in custom claims or email
-              // For regular users, mobile_no is the UID
-              const mobileNo = firebaseUser.uid;
-              await fetchUserData(mobileNo);
+              console.log('AuthContext: Firebase Auth user detected:', firebaseUser.email);
+              
+              // First, try checking admin status with cached token (faster, works on refresh)
+              // Only force refresh if cached token doesn't show admin role
+              let isAdminRole = await checkAdminStatus(firebaseUser, false);
+              
+              // If not admin with cached token, try forcing refresh (might be a new claim)
+              // But only do this if we're not in the initial load (to avoid unnecessary refreshes on every page load)
+              if (!isAdminRole) {
+                console.log('AuthContext: Cached token shows no admin role, trying forced refresh...');
+                // Wait a bit before forcing refresh to allow Firebase to restore session
+                await new Promise(resolve => setTimeout(resolve, 500));
+                isAdminRole = await checkAdminStatus(firebaseUser, true);
+              }
+              
+              // For admin users, don't try to fetch from Firestore users collection
+              // Admin users are authenticated via Firebase Auth, not the custom OTP flow
+              // Only fetch user data if this is a regular user (mobile number as UID)
+              // Firebase Auth UIDs are long alphanumeric strings, mobile numbers are 10 digits
+              const uid = firebaseUser.uid;
+              // Only fetch if it looks like a mobile number (10 digits)
+              if (/^\d{10}$/.test(uid)) {
+                await fetchUserData(uid);
+              } else {
+                // This is an admin user - don't fetch from Firestore
+                console.log('AuthContext: Admin user detected - skipping Firestore user lookup');
+              }
             } else {
               // No Firebase Auth user - this is normal for regular users
               // Only clear if we don't have a stored mobile number
               if (!storedMobile) {
+                console.log('AuthContext: No Firebase Auth user and no stored mobile - clearing auth');
                 setUser(null);
                 setIsAdmin(false);
+              } else {
+                console.log('AuthContext: No Firebase Auth user but stored mobile exists - keeping regular user auth');
               }
             }
             if (isMounted) {
@@ -178,6 +232,118 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     await fetchUserData(mobileNo);
   };
 
+  const adminLogin = async (email: string, password: string) => {
+    if (!auth) {
+      throw new Error('Firebase Auth is not initialized. Please check your environment variables.');
+    }
+    try {
+      // Sign out any existing user first to ensure clean state
+      // This is critical - old tokens won't have new custom claims
+      try {
+        if (auth.currentUser) {
+          console.log('Signing out existing user to ensure clean state...');
+          await auth.signOut();
+          // Wait a moment for sign out to complete
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      } catch (signOutError) {
+        // Ignore sign out errors - user might not be signed in
+        console.log('No existing user to sign out');
+      }
+
+      console.log('Signing in with email/password...');
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
+      
+      console.log('Login successful, checking admin status...');
+      
+      // Force token refresh with retry logic (custom claims can take a moment to propagate)
+      // Important: After setting custom claims, Firebase needs time to propagate them
+      // The token refresh must happen AFTER the claims are propagated
+      let isAdmin = false;
+      let retries = 6; // Try up to 6 times
+      const baseDelay = 2000; // Start with 2 seconds
+      
+      while (retries > 0 && !isAdmin) {
+        const attemptNumber = 7 - retries;
+        console.log(`Admin status check attempt ${attemptNumber}/${6}...`);
+        
+        // Force refresh the token - this gets a new token from Firebase
+        // The true parameter forces a refresh from the server
+        await firebaseUser.getIdToken(true);
+        
+        // Wait for Firebase to propagate custom claims
+        // Custom claims can take 1-10 seconds to propagate after being set
+        // Use exponential backoff: 2s, 3s, 4s, 5s, 6s, 7s
+        const delay = baseDelay + (attemptNumber - 1) * 1000;
+        if (retries < 6) {
+          console.log(`Waiting ${delay}ms for claims to propagate...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        
+        // Get the token result with claims - force refresh again
+        const idTokenResult = await firebaseUser.getIdTokenResult(true);
+        const userRole = idTokenResult.claims?.role;
+        
+        console.log(`Attempt ${attemptNumber} result:`, {
+          role: userRole || 'undefined',
+          allClaims: idTokenResult.claims,
+          tokenIssuedAt: new Date(idTokenResult.issuedAtTime),
+        });
+        
+        if (userRole === 'admin') {
+          isAdmin = true;
+          console.log('✅ Admin role confirmed!');
+          break;
+        }
+        
+        retries--;
+      }
+      
+      if (!isAdmin) {
+        // Sign out if not admin
+        console.log('Admin role not found, signing out...');
+        await auth.signOut();
+        
+        // Provide helpful error message
+        const errorMessage = `Access denied. Admin privileges not found in token. This usually means:
+
+1. The custom claim was just set - wait 10-30 seconds and try again
+2. You need to completely sign out and sign in again
+3. The claim wasn't set - run: node scripts/setup-admin.js ${email}
+
+To verify the claim is set, run: node scripts/verify-admin.js ${email}`;
+        
+        throw new Error(errorMessage);
+      }
+      
+      // Verify admin status one more time using checkAdminStatus
+      // This ensures the state is properly set
+      await checkAdminStatus(firebaseUser, true);
+      
+      console.log('✅ Admin login successful - user has admin role');
+      
+      // Admin login successful - Firebase Auth state change will handle the rest
+      // The useEffect will pick up the auth state change and set isAdmin
+    } catch (error: any) {
+      console.error('Admin login error:', error);
+      
+      // Handle Firebase Auth errors
+      if (error.code === 'auth/user-not-found') {
+        throw new Error('No account found with this email. Please create the user in Firebase Console first.');
+      } else if (error.code === 'auth/wrong-password') {
+        throw new Error('Incorrect password. Please try again.');
+      } else if (error.code === 'auth/invalid-email') {
+        throw new Error('Invalid email address. Please check your email.');
+      } else if (error.code === 'auth/too-many-requests') {
+        throw new Error('Too many failed login attempts. Please try again later.');
+      }
+      
+      // Re-throw our custom errors or Firebase errors
+      throw error;
+    }
+  };
+
   const logout = async () => {
     // Only sign out from Firebase Auth if user is logged in via Firebase Auth (admin)
     // Regular users logged in via OTP don't need Firebase Auth sign out
@@ -207,6 +373,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAdmin,
     isLoading,
     login,
+    adminLogin,
     logout,
     refreshUser,
   };

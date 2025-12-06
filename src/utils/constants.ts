@@ -27,6 +27,8 @@ export const ROUTES = {
   ADMIN_TOURNAMENTS: '/admin/tournaments',
   ADMIN_USERS: '/admin/users',
   ADMIN_PAYMENTS: '/admin/payments',
+  ADMIN_SETTINGS: '/admin/settings',
+  ADMIN_NOTIFICATIONS: '/admin/notifications',
 } as const;
 
 
