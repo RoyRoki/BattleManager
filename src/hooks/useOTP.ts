@@ -150,78 +150,112 @@ export const useOTP = () => {
   };
 
   const checkUserExists = async (mobileNumber: string): Promise<boolean> => {
-    let timeoutId: NodeJS.Timeout | null = null;
+    const MAX_RETRIES = 3;
+    const TIMEOUT_MS = 60000; // 60 seconds (1 minute) timeout per attempt for production
+    let lastError: Error | null = null;
     
-    try {
-      console.log('checkUserExists: Starting check for mobile:', mobileNumber);
-      const userRef = doc(firestore, 'users', mobileNumber);
-      console.log('checkUserExists: Firestore reference created');
-      
-      // Create a timeout promise that properly rejects
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          console.warn('checkUserExists: Timeout after 8 seconds, treating as new user');
-          reject(new Error('User check timeout - proceeding as new user'));
-        }, 8000);
-      });
-      
-      // Create the Firestore promise
-      const docPromise = getDoc(userRef).then((userDoc) => {
-        // Clear timeout if we got a response
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-        console.log('checkUserExists: Document fetched, exists:', userDoc.exists());
-        return userDoc.exists();
-      }).catch((error) => {
-        // Clear timeout on error
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-        throw error;
-      });
-      
-      // Race between Firestore call and timeout
-      const result = await Promise.race([docPromise, timeoutPromise]);
-      console.log('checkUserExists: Result:', result);
-      return result as boolean;
-    } catch (error: any) {
-      // Ensure timeout is cleared
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      
-      console.error('checkUserExists: Error checking user:', error);
-      console.error('checkUserExists: Error details:', {
-        message: error.message,
-        code: error.code,
-        stack: error.stack,
-      });
-      
-      // If it's a permission error, assume user doesn't exist (new user flow)
-      if (error.code === 'permission-denied' || error.message?.includes('permission')) {
-        console.warn('checkUserExists: Permission denied - treating as new user');
-        return false;
-      }
-      
-      // If it's a timeout error, treat as new user
-      if (error.message?.includes('timeout')) {
-        console.warn('checkUserExists: Timeout occurred - treating as new user');
-        return false;
-      }
-      
-      // For network errors or other errors, also default to false (new user) to allow signup flow
-      if (error.code === 'unavailable' || error.code === 'deadline-exceeded' || error.message?.includes('network')) {
-        console.warn('checkUserExists: Network error - treating as new user');
-        return false;
-      }
-      
-      // For other errors, also default to false (new user) to allow signup flow
-      return false;
+    console.log('checkUserExists: Starting check for mobile:', mobileNumber);
+    
+    // Check if Firestore is initialized
+    if (!firestore) {
+      console.error('checkUserExists: Firestore not initialized');
+      throw new Error('Firestore is not initialized. Please check your connection.');
     }
+    
+    // Retry logic with exponential backoff
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      
+      try {
+        console.log(`checkUserExists: Attempt ${attempt + 1}/${MAX_RETRIES}`);
+        
+        const userRef = doc(firestore, 'users', mobileNumber);
+        
+        // Create timeout promise
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error(`User check timeout after ${TIMEOUT_MS / 1000} seconds`));
+          }, TIMEOUT_MS);
+        });
+        
+        // Create Firestore query promise
+        const docPromise = getDoc(userRef)
+          .then((userDoc) => {
+            // Clear timeout on success
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+            const exists = userDoc.exists();
+            console.log('checkUserExists: Document fetched, exists:', exists);
+            return exists;
+          })
+          .catch((error) => {
+            // Clear timeout on error
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+            throw error;
+          });
+        
+        // Race between Firestore call and timeout
+        const result = await Promise.race([docPromise, timeoutPromise]);
+        console.log('checkUserExists: Successfully checked user, exists:', result);
+        return result as boolean;
+      } catch (error: any) {
+        // Ensure timeout is cleared
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        
+        lastError = error;
+        const isLastAttempt = attempt === MAX_RETRIES - 1;
+        
+        // Handle specific error codes
+        if (error.code === 'permission-denied') {
+          console.warn('checkUserExists: Permission denied');
+          // Permission errors are definitive - user likely doesn't exist or rules block access
+          // Return false but don't throw (allows signup flow)
+          return false;
+        }
+        
+        // For timeout/network errors, retry unless it's the last attempt
+        const isTimeoutOrNetworkError = 
+          error.message?.includes('timeout') ||
+          error.code === 'unavailable' ||
+          error.code === 'deadline-exceeded' ||
+          error.message?.includes('network') ||
+          error.code === 'cancelled';
+        
+        if (isTimeoutOrNetworkError && !isLastAttempt) {
+          // Exponential backoff: wait 1s, 2s, 4s
+          const backoffMs = Math.pow(2, attempt) * 1000;
+          console.warn(`checkUserExists: Retryable error (${error.message}), retrying in ${backoffMs}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
+          continue; // Retry
+        }
+        
+        // If it's the last attempt or a non-retryable error, throw
+        if (isLastAttempt) {
+          console.error('checkUserExists: All retry attempts failed:', error);
+          console.error('checkUserExists: Error details:', {
+            message: error.message,
+            code: error.code,
+            stack: error.stack,
+          });
+          // Format a user-friendly error message
+          if (isTimeoutOrNetworkError) {
+            throw new Error('Unable to check user. Please check your internet connection and try again.');
+          }
+          throw new Error(`Failed to check user: ${error.message || 'Unknown error'}`);
+        }
+      }
+    }
+    
+    // This should never be reached, but TypeScript requires it
+    throw lastError || new Error('Failed to check user after retries');
   };
 
   const resetOTP = () => {

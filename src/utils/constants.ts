@@ -25,6 +25,7 @@ export const ROUTES = {
   SUPPORT: '/support',
   PROFILE: '/profile',
   NOTIFICATIONS: '/notifications',
+  TOURNAMENT_HISTORY: '/tournaments/history',
   ADMIN_DASHBOARD: '/admin',
   ADMIN_TOURNAMENTS: '/admin/tournaments',
   ADMIN_USERS: '/admin/users',

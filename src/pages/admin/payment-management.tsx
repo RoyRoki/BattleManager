@@ -6,13 +6,30 @@ import { useFirestoreTransaction } from '../../hooks/useFirestoreTransaction';
 import { Payment } from '../../types';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
+import { ConfirmDialog } from '../../shared/components/ui/ConfirmDialog';
 
 export const PaymentManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'add_money' | 'withdrawal'>('add_money');
-  const [payments, loading] = useCollection(
+  const [payments, loading, error] = useCollection(
     collection(firestore, 'payments')
-  ) as unknown as [{ docs: any[] } | null, boolean];
+  ) as unknown as [{ docs: any[] } | null, boolean, Error | undefined];
+  
+  // Log errors for debugging
+  if (error) {
+    console.error('PaymentManagement: Firestore error:', error);
+  }
   const { addPoints } = useFirestoreTransaction();
+  
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    message: string;
+    title?: string;
+    confirmText?: string;
+    cancelText?: string;
+    confirmVariant?: 'primary' | 'danger' | 'success';
+    onConfirm: () => void;
+  } | null>(null);
 
   // Separate payments by type
   const { addMoneyPayments, withdrawalPayments } = useMemo(() => {
@@ -73,61 +90,88 @@ export const PaymentManagement: React.FC = () => {
   };
 
   const handleRejectAddMoney = async (payment: Payment) => {
-    if (!confirm('Are you sure you want to reject this payment?')) return;
+    setConfirmDialog({
+      isOpen: true,
+      message: 'Are you sure you want to reject this payment?',
+      title: 'Reject Payment',
+      confirmText: 'Reject',
+      cancelText: 'Cancel',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await updateDoc(doc(firestore, 'payments', payment.id), {
+            status: 'rejected',
+            approved_by: import.meta.env.VITE_ADMIN_EMAIL || 'admin@battlemanager.com',
+            approved_at: new Date(),
+            updated_at: new Date(),
+          });
 
-    try {
-      await updateDoc(doc(firestore, 'payments', payment.id), {
-        status: 'rejected',
-        approved_by: import.meta.env.VITE_ADMIN_EMAIL || 'admin@battlemanager.com',
-        approved_at: new Date(),
-        updated_at: new Date(),
-      });
-
-      toast.success('Payment rejected');
-    } catch (error) {
-      console.error('Error rejecting payment:', error);
-      toast.error('Failed to reject payment');
-    }
+          toast.success('Payment rejected');
+        } catch (error) {
+          console.error('Error rejecting payment:', error);
+          toast.error('Failed to reject payment');
+        }
+      },
+    });
   };
 
   const handleCompleteWithdrawal = async (payment: Payment) => {
-    if (!confirm('Mark this withdrawal as completed? The amount has been transferred to the user.')) return;
+    setConfirmDialog({
+      isOpen: true,
+      message: 'Mark this withdrawal as completed? The amount has been transferred to the user.',
+      title: 'Complete Withdrawal',
+      confirmText: 'Mark Completed',
+      cancelText: 'Cancel',
+      confirmVariant: 'success',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await updateDoc(doc(firestore, 'payments', payment.id), {
+            status: 'approved',
+            approved_by: import.meta.env.VITE_ADMIN_EMAIL || 'admin@battlemanager.com',
+            approved_at: new Date(),
+            updated_at: new Date(),
+          });
 
-    try {
-      await updateDoc(doc(firestore, 'payments', payment.id), {
-        status: 'approved',
-        approved_by: import.meta.env.VITE_ADMIN_EMAIL || 'admin@battlemanager.com',
-        approved_at: new Date(),
-        updated_at: new Date(),
-      });
-
-      toast.success('Withdrawal marked as completed');
-    } catch (error) {
-      console.error('Error completing withdrawal:', error);
-      toast.error('Failed to mark withdrawal as completed');
-    }
+          toast.success('Withdrawal marked as completed');
+        } catch (error) {
+          console.error('Error completing withdrawal:', error);
+          toast.error('Failed to mark withdrawal as completed');
+        }
+      },
+    });
   };
 
   const handleRejectWithdrawal = async (payment: Payment) => {
-    if (!confirm('Reject this withdrawal and refund points to user?')) return;
+    setConfirmDialog({
+      isOpen: true,
+      message: 'Reject this withdrawal and refund points to user?',
+      title: 'Reject Withdrawal',
+      confirmText: 'Reject & Refund',
+      cancelText: 'Cancel',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          // Refund points back to user
+          await addPoints(payment.user_mobile, payment.amount);
 
-    try {
-      // Refund points back to user
-      await addPoints(payment.user_mobile, payment.amount);
+          await updateDoc(doc(firestore, 'payments', payment.id), {
+            status: 'rejected',
+            approved_by: import.meta.env.VITE_ADMIN_EMAIL || 'admin@battlemanager.com',
+            approved_at: new Date(),
+            updated_at: new Date(),
+            notes: 'Withdrawal rejected - points refunded',
+          });
 
-      await updateDoc(doc(firestore, 'payments', payment.id), {
-        status: 'rejected',
-        approved_by: import.meta.env.VITE_ADMIN_EMAIL || 'admin@battlemanager.com',
-        approved_at: new Date(),
-        updated_at: new Date(),
-        notes: 'Withdrawal rejected - points refunded',
-      });
-
-      toast.success('Withdrawal rejected and points refunded');
-    } catch (error) {
-      console.error('Error rejecting withdrawal:', error);
-      toast.error('Failed to reject withdrawal');
-    }
+          toast.success('Withdrawal rejected and points refunded');
+        } catch (error) {
+          console.error('Error rejecting withdrawal:', error);
+          toast.error('Failed to reject withdrawal');
+        }
+      },
+    });
   };
 
   return (
@@ -161,8 +205,21 @@ export const PaymentManagement: React.FC = () => {
           </button>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="bg-accent bg-opacity-20 border border-accent rounded-lg p-4 mb-6">
+            <p className="text-accent font-body">
+              ⚠️ Unable to load payment data. Please check your connection and refresh the page.
+            </p>
+            <p className="text-xs text-gray-400 mt-2">Error: {error.message || 'Unknown error'}</p>
+          </div>
+        )}
+
         {loading ? (
-          <div className="text-center py-8 text-gray-400">Loading...</div>
+          <div className="text-center py-8">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            <p className="text-gray-400">Loading payments...</p>
+          </div>
         ) : (
           <>
             {activeTab === 'add_money' && (
@@ -263,7 +320,7 @@ export const PaymentManagement: React.FC = () => {
                             <div className="mt-3 p-3 bg-bg rounded-lg border border-gray-700">
                               <p className="text-xs text-gray-500 mb-1">Bank Details:</p>
                               <p className="text-sm text-white">
-                                Account: {payment.bank_account_no ? `****${payment.bank_account_no.slice(-4)}` : 'N/A'}
+                                Account: {payment.bank_account_no || 'N/A'}
                               </p>
                               <p className="text-sm text-white">
                                 IFSC: {payment.ifsc_code || 'N/A'}
@@ -299,6 +356,20 @@ export const PaymentManagement: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* Confirmation Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText={confirmDialog.confirmText}
+          cancelText={confirmDialog.cancelText}
+          confirmVariant={confirmDialog.confirmVariant}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
     </div>
   );
 };

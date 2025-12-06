@@ -4,8 +4,6 @@ import { collection, query, where, orderBy } from 'firebase/firestore';
 import { firestore } from '../../../../services/firebaseService';
 import { Notification } from '../../domain/entities/Notification';
 import { NotificationRepository } from '../../data/repositories/NotificationRepository';
-import { GetNotificationsUseCase } from '../../domain/usecases/GetNotificationsUseCase';
-import { GetUnreadCountUseCase } from '../../domain/usecases/GetUnreadCountUseCase';
 import { MarkAsReadUseCase } from '../../domain/usecases/MarkAsReadUseCase';
 import { MarkAllAsReadUseCase } from '../../domain/usecases/MarkAllAsReadUseCase';
 
@@ -27,8 +25,6 @@ export const useNotificationViewModel = (
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const repository = new NotificationRepository();
-  const getNotificationsUseCase = new GetNotificationsUseCase(repository);
-  const getUnreadCountUseCase = new GetUnreadCountUseCase(repository);
   const markAsReadUseCase = new MarkAsReadUseCase(repository);
   const markAllAsReadUseCase = new MarkAllAsReadUseCase(repository);
 

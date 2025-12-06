@@ -31,6 +31,11 @@ const TournamentDetailPage = lazy(() =>
     default: module.TournamentDetailPage,
   }))
 );
+const TournamentHistoryPage = lazy(() =>
+  import('./pages/tournament-history-page').then((module) => ({
+    default: module.TournamentHistoryPage,
+  }))
+);
 const AdminDashboard = lazy(() =>
   import('./pages/admin/admin-dashboard').then((module) => ({
     default: module.AdminDashboard,
@@ -104,7 +109,7 @@ function App() {
                     <Route
                       path={ROUTES.HOME}
                       element={
-                        <ProtectedRoute requireAuth={false}>
+                        <ProtectedRoute requireAuth={true}>
                           <HomePage />
                         </ProtectedRoute>
                       }
@@ -139,6 +144,14 @@ function App() {
                       element={
                         <ProtectedRoute requireAuth>
                           <NotificationsPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path={ROUTES.TOURNAMENT_HISTORY}
+                      element={
+                        <ProtectedRoute requireAuth={false}>
+                          <TournamentHistoryPage />
                         </ProtectedRoute>
                       }
                     />

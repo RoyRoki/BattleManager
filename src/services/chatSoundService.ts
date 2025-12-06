@@ -17,6 +17,8 @@ const isSoundEnabled = (): boolean => {
 };
 
 // Generate a simple beep sound using Web Audio API as fallback
+// Note: This function is reserved for future use
+/*
 const generateBeepSound = (frequency: number, duration: number, type: 'sent' | 'received'): Howl => {
   // For now, we'll use a simple approach with Howler
   // In production, you can replace this with actual sound files
@@ -51,6 +53,7 @@ const generateBeepSound = (frequency: number, duration: number, type: 'sent' | '
     },
   });
 };
+*/
 
 // Create sound instances (lazy loaded)
 let sentSound: Howl | null = null;

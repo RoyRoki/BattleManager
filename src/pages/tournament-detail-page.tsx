@@ -1,14 +1,15 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useDocument } from 'react-firebase-hooks/firestore';
-import { doc } from 'firebase/firestore';
+import { useDocument, useCollection } from 'react-firebase-hooks/firestore';
+import { doc, collection } from 'firebase/firestore';
 import { firestore } from '../services/firebaseService';
 import { Tournament, TournamentStatus } from '../types';
 import { EnrollButton } from '../components/enroll-button';
 import { motion } from 'framer-motion';
 import { decryptCredentials } from '../utils/encryptCredentials';
 import { useAuth } from '../contexts/AuthContext';
-import { HiArrowLeft } from 'react-icons/hi';
+import { HiArrowLeft, HiFire, HiClipboardCopy, HiLockClosed, HiLockOpen, HiEye, HiEyeOff } from 'react-icons/hi';
+import toast from 'react-hot-toast';
 
 // Compute effective status based on reveal_time
 const getEffectiveStatus = (tournament: Tournament): TournamentStatus => {
@@ -28,6 +29,7 @@ export const TournamentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
   const [tournamentDoc, loading, error] = useDocument(
     id ? doc(firestore, 'tournaments', id) : null
   );
@@ -85,12 +87,24 @@ export const TournamentDetailPage: React.FC = () => {
     tournament.reveal_time &&
     new Date() >= tournament.reveal_time;
 
-  let credentials = null;
-  if (canViewCredentials && tournament.encrypted_credentials) {
-    try {
-      credentials = decryptCredentials(tournament.encrypted_credentials);
-    } catch (error) {
-      console.error('Failed to decrypt credentials:', error);
+  // Decrypt credentials if user can view them
+  let ffId = null;
+  let ffPassword = null;
+  
+  if (canViewCredentials) {
+    if (tournament.ff_id_encrypted) {
+      try {
+        ffId = decryptCredentials(tournament.ff_id_encrypted);
+      } catch (error) {
+        console.error('Failed to decrypt FF-ID:', error);
+      }
+    }
+    if (tournament.ff_password_encrypted) {
+      try {
+        ffPassword = decryptCredentials(tournament.ff_password_encrypted);
+      } catch (error) {
+        console.error('Failed to decrypt FF-Password:', error);
+      }
     }
   }
 
@@ -182,25 +196,99 @@ export const TournamentDetailPage: React.FC = () => {
             </div>
           )}
 
-          {canViewCredentials && credentials && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="bg-bg border border-primary rounded-lg p-4 mb-6"
-            >
-              <h3 className="text-lg font-heading text-primary mb-2">Tournament Credentials</h3>
-              <p className="text-white font-mono break-all">{credentials}</p>
-            </motion.div>
+          {/* Kill Leaderboard for completed tournaments */}
+          {effectiveStatus === 'completed' && tournament.player_kills && Object.keys(tournament.player_kills).length > 0 && (
+            <KillLeaderboard tournament={tournament} currentUserMobile={user?.mobile_no} />
           )}
 
-          {tournament.reveal_time && new Date() < tournament.reveal_time && (
+          {/* Credentials Section */}
+          {canViewCredentials && (ffId || ffPassword) ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-bg border border-primary rounded-lg p-4 mb-6"
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <HiLockOpen className="w-5 h-5 text-primary" />
+                <h3 className="text-lg font-heading text-primary">Tournament Credentials</h3>
+              </div>
+              
+              <div className="space-y-3">
+                {ffId && (
+                  <div className="bg-bg-secondary rounded-lg p-3 border border-gray-700">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-sm text-gray-400">FF-ID</label>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(ffId);
+                          toast.success('FF-ID copied to clipboard!');
+                        }}
+                        className="text-primary hover:text-opacity-80 transition"
+                        title="Copy FF-ID"
+                      >
+                        <HiClipboardCopy className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <p className="text-white font-mono text-sm break-all">{ffId}</p>
+                  </div>
+                )}
+                
+                {ffPassword && (
+                  <div className="bg-bg-secondary rounded-lg p-3 border border-gray-700">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-sm text-gray-400">FF-Password</label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="text-gray-400 hover:text-white transition"
+                          title={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <HiEyeOff className="w-4 h-4" /> : <HiEye className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(ffPassword);
+                            toast.success('FF-Password copied to clipboard!');
+                          }}
+                          className="text-primary hover:text-opacity-80 transition"
+                          title="Copy FF-Password"
+                        >
+                          <HiClipboardCopy className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-white font-mono text-sm break-all">
+                      {showPassword ? ffPassword : '•'.repeat(ffPassword.length)}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          ) : !user ? (
             <div className="bg-bg-tertiary border border-gray-700 rounded-lg p-4 mb-6">
-              <p className="text-sm text-gray-400">
-                Credentials will be revealed on:{' '}
-                {new Date(tournament.reveal_time).toLocaleString()}
-              </p>
+              <div className="flex items-center gap-2">
+                <HiLockClosed className="w-5 h-5 text-gray-500" />
+                <p className="text-sm text-gray-400">Login and enroll to view credentials</p>
+              </div>
             </div>
-          )}
+          ) : !user.enrolled_tournaments.includes(tournament.id) ? (
+            <div className="bg-bg-tertiary border border-gray-700 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-2">
+                <HiLockClosed className="w-5 h-5 text-gray-500" />
+                <p className="text-sm text-gray-400">Enroll in this tournament to view credentials</p>
+              </div>
+            </div>
+          ) : tournament.reveal_time && new Date() < tournament.reveal_time ? (
+            <div className="bg-bg-tertiary border border-gray-700 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-2">
+                <HiLockClosed className="w-5 h-5 text-gray-500" />
+                <p className="text-sm text-gray-400">
+                  Credentials will be revealed on:{' '}
+                  <span className="text-primary">{new Date(tournament.reveal_time).toLocaleString()}</span>
+                </p>
+              </div>
+            </div>
+          ) : null}
 
           <EnrollButton tournament={tournament} />
         </motion.div>
@@ -209,4 +297,105 @@ export const TournamentDetailPage: React.FC = () => {
   );
 };
 
+// Kill Leaderboard Component
+interface KillLeaderboardProps {
+  tournament: Tournament;
+  currentUserMobile?: string;
+}
 
+const KillLeaderboard: React.FC<KillLeaderboardProps> = ({ tournament, currentUserMobile }) => {
+  const [usersSnapshot] = useCollection(collection(firestore, 'users'));
+
+  const leaderboard = useMemo(() => {
+    if (!tournament.player_kills || !usersSnapshot?.docs) return [];
+
+    const userMap = new Map<string, { name: string; ff_id: string }>();
+    usersSnapshot.docs.forEach((doc) => {
+      const data = doc.data();
+      userMap.set(data.mobile_no, {
+        name: data.name || 'Unknown',
+        ff_id: data.ff_id || 'N/A',
+      });
+    });
+
+    const pointsPerKill = tournament.payment_info?.points_per_kill || 10;
+
+    return Object.entries(tournament.player_kills)
+      .map(([mobile, data]) => {
+        // Calculate winning points: use custom credit if available, otherwise kills * points_per_kill
+        const customCredit = tournament.payment_info?.custom_credits?.[mobile];
+        const winningPoints = customCredit || (data.kills * pointsPerKill);
+        
+        return {
+          mobile,
+          kills: data.kills,
+          winningPoints,
+          ...userMap.get(mobile),
+        };
+      })
+      .sort((a, b) => b.kills - a.kills);
+  }, [tournament.player_kills, tournament.payment_info, usersSnapshot]);
+
+  if (leaderboard.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-bg border border-orange-500/50 rounded-lg p-4 mb-6"
+    >
+      <h3 className="text-lg font-heading text-orange-400 mb-4 flex items-center gap-2">
+        <HiFire className="w-5 h-5" />
+        Kill Leaderboard
+      </h3>
+      <div className="space-y-2">
+        {leaderboard.map((player, index) => {
+          const isCurrentUser = player.mobile === currentUserMobile;
+          return (
+            <motion.div
+              key={player.mobile}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.05 }}
+              className={`flex items-center gap-3 p-3 rounded-lg ${
+                isCurrentUser
+                  ? 'bg-orange-900/30 border border-orange-500'
+                  : 'bg-bg-secondary'
+              }`}
+            >
+              {/* Rank Badge */}
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-heading flex-shrink-0 ${
+                  index === 0
+                    ? 'bg-yellow-500 text-black'
+                    : index === 1
+                    ? 'bg-gray-400 text-black'
+                    : index === 2
+                    ? 'bg-orange-700 text-white'
+                    : 'bg-gray-700 text-gray-300'
+                }`}
+              >
+                {index + 1}
+              </div>
+
+              {/* Name */}
+              <div className="flex-1 min-w-0">
+                <p className={`font-heading truncate ${isCurrentUser ? 'text-orange-300' : 'text-white'}`}>
+                  {player.name || 'Unknown'}
+                  {isCurrentUser && <span className="text-xs ml-2">(You)</span>}
+                </p>
+                <p className="text-xs text-gray-500">FF ID: {player.ff_id || 'N/A'}</p>
+              </div>
+
+              {/* Winning Points */}
+              <div className="text-right flex-shrink-0">
+                <p className="text-lg font-heading text-green-400">{player.winningPoints} pts</p>
+                <p className="text-xs text-gray-500">{player.kills} kills</p>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </motion.div>
+  );
+};

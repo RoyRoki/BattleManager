@@ -11,43 +11,110 @@ export interface IUserDataSource {
 export class UserDataSource implements IUserDataSource {
   /**
    * Check if a user exists with the given mobile number
+   * Uses retry logic with exponential backoff for better reliability
    */
   async checkUserExists(mobileNumber: string): Promise<boolean> {
-    try {
-      console.log('UserDataSource: Checking user existence for:', mobileNumber);
-      const userRef = doc(firestore, 'users', mobileNumber);
-      console.log('UserDataSource: Firestore reference created');
-      
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise<boolean>((_, reject) => {
-        setTimeout(() => reject(new Error('checkUserExists timeout after 10 seconds')), 10000);
-      });
-      
-      const docPromise = getDoc(userRef).then((userDoc) => {
-        console.log('UserDataSource: Document fetched, exists:', userDoc.exists());
-        return userDoc.exists();
-      });
-      
-      const result = await Promise.race([docPromise, timeoutPromise]);
-      console.log('UserDataSource: Result:', result);
-      return result as boolean;
-    } catch (error: any) {
-      console.error('UserDataSource: Error checking user:', error);
-      console.error('UserDataSource: Error details:', {
-        message: error.message,
-        code: error.code,
-        stack: error.stack,
-      });
-      
-      // If it's a permission error, assume user doesn't exist (new user flow)
-      if (error.code === 'permission-denied' || error.message?.includes('permission')) {
-        console.warn('UserDataSource: Permission denied - treating as new user');
-        return false;
-      }
-      
-      // For other errors, also default to false (new user) to allow signup flow
-      return false;
+    const MAX_RETRIES = 3;
+    const TIMEOUT_MS = 60000; // 60 seconds (1 minute) timeout per attempt for production
+    let lastError: Error | null = null;
+    
+    console.log('UserDataSource: Checking user existence for:', mobileNumber);
+    
+    // Check if Firestore is initialized
+    if (!firestore) {
+      console.error('UserDataSource: Firestore not initialized');
+      throw new Error('Firestore is not initialized. Please check your connection.');
     }
+    
+    // Retry logic with exponential backoff
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      
+      try {
+        console.log(`UserDataSource: Attempt ${attempt + 1}/${MAX_RETRIES}`);
+        
+        const userRef = doc(firestore, 'users', mobileNumber);
+        
+        // Create timeout promise
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error(`checkUserExists timeout after ${TIMEOUT_MS / 1000} seconds`));
+          }, TIMEOUT_MS);
+        });
+        
+        // Create Firestore query promise
+        const docPromise = getDoc(userRef)
+          .then((userDoc) => {
+            // Clear timeout on success
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+            const exists = userDoc.exists();
+            console.log('UserDataSource: Document fetched, exists:', exists);
+            return exists;
+          })
+          .catch((error) => {
+            // Clear timeout on error
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+            throw error;
+          });
+        
+        // Race between Firestore call and timeout
+        const result = await Promise.race([docPromise, timeoutPromise]);
+        console.log('UserDataSource: Successfully checked user, exists:', result);
+        return result as boolean;
+      } catch (error: any) {
+        // Ensure timeout is cleared
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        
+        lastError = error;
+        const isLastAttempt = attempt === MAX_RETRIES - 1;
+        
+        // Handle specific error codes
+        if (error.code === 'permission-denied') {
+          console.warn('UserDataSource: Permission denied');
+          // Permission errors are definitive - user likely doesn't exist or rules block access
+          // Return false but don't throw (allows signup flow)
+          return false;
+        }
+        
+        // For timeout/network errors, retry unless it's the last attempt
+        const isTimeoutOrNetworkError = 
+          error.message?.includes('timeout') ||
+          error.code === 'unavailable' ||
+          error.code === 'deadline-exceeded' ||
+          error.message?.includes('network') ||
+          error.code === 'cancelled';
+        
+        if (isTimeoutOrNetworkError && !isLastAttempt) {
+          // Exponential backoff: wait 1s, 2s, 4s
+          const backoffMs = Math.pow(2, attempt) * 1000;
+          console.warn(`UserDataSource: Retryable error (${error.message}), retrying in ${backoffMs}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
+          continue; // Retry
+        }
+        
+        // If it's the last attempt or a non-retryable error, throw
+        if (isLastAttempt) {
+          console.error('UserDataSource: All retry attempts failed:', error);
+          // Format a user-friendly error message
+          if (isTimeoutOrNetworkError) {
+            throw new Error('Unable to check user. Please check your internet connection and try again.');
+          }
+          throw new Error(`Failed to check user: ${error.message || 'Unknown error'}`);
+        }
+      }
+    }
+    
+    // This should never be reached, but TypeScript requires it
+    throw lastError || new Error('Failed to check user after retries');
   }
 
   /**

@@ -62,35 +62,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const OTP_EXPIRY_MINUTES = 5;
   
   // Check for development/mock mode
-  const isDevelopment = process.env.NODE_ENV === 'development' || process.env.MOCK_OTP === 'true';
+  // Enable mock mode if MOCK_OTP is set to 'true' or in development
+  const MOCK_OTP = process.env.MOCK_OTP?.trim();
+  const isDevelopment = process.env.NODE_ENV === 'development' || MOCK_OTP === 'true' || MOCK_OTP === '1';
   const MOCK_OTP_CODE = '123456'; // Fixed OTP for testing
 
-  if (!FAST2SMS_API_KEY && !isDevelopment) {
-    console.error('send-otp: Missing VERCEL_FAST2SMS_API_KEY environment variable');
-    return res.status(500).json({ 
-      success: false,
-      error: 'Fast2SMS API key not configured. Please set VERCEL_FAST2SMS_API_KEY environment variable.' 
-    });
-  }
+  // Debug logging
+  console.log('send-otp: Environment check:', {
+    NODE_ENV: process.env.NODE_ENV,
+    MOCK_OTP: MOCK_OTP,
+    MOCK_OTP_type: typeof MOCK_OTP,
+    isDevelopment: isDevelopment,
+    hasFast2SMSKey: !!FAST2SMS_API_KEY,
+  });
 
-  try {
-    // In development mode, use fixed OTP; otherwise generate random
-    const otp = isDevelopment ? MOCK_OTP_CODE : Math.floor(100000 + Math.random() * 900000).toString();
+  // If mock mode is enabled, skip Fast2SMS entirely
+  if (isDevelopment) {
+    const otp = MOCK_OTP_CODE;
     const expiryTime = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
 
-    if (isDevelopment) {
-      console.log('send-otp: 🔧 DEVELOPMENT MODE - Using mock OTP:', otp);
-      console.log('send-otp: 📱 Mobile:', mobileNumber);
-    }
+    console.log('send-otp: 🔧 MOCK MODE - Using mock OTP:', otp);
+    console.log('send-otp: 📱 Mobile:', mobileNumber);
 
-    // Store OTP in Firebase Realtime Database
+    // Store OTP in Firebase Realtime Database (optional, for consistency)
     try {
       const db = getDatabase();
-      if (!db) {
-        console.warn('send-otp: Firebase Database not initialized. OTP will not be stored.');
-      } else {
+      if (db) {
         const otpRef = db.ref(`otps/${mobileNumber}`);
-        
         await otpRef.set({
           otp: otp,
           createdAt: Date.now(),
@@ -98,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           attempts: 0,
         });
 
-        // Auto-delete OTP after expiry (set expiration timer)
+        // Auto-delete OTP after expiry
         setTimeout(async () => {
           try {
             await otpRef.remove();
@@ -108,23 +106,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }, OTP_EXPIRY_MINUTES * 60 * 1000);
       }
     } catch (firebaseError: any) {
-      console.error('send-otp: Firebase error:', firebaseError);
-      console.error('send-otp: Firebase error details:', {
-        message: firebaseError.message,
-        code: firebaseError.code,
-      });
-      // Continue even if Firebase fails (fallback mode)
+      console.warn('send-otp: Firebase error (continuing in mock mode):', firebaseError.message);
+      // Continue even if Firebase fails
     }
 
-    // In development mode, skip actual SMS sending
-    if (isDevelopment) {
-      console.log('send-otp: ✅ Mock OTP "sent" successfully (no actual SMS)');
-      return res.status(200).json({
-        success: true,
-        message: 'OTP sent successfully (Development Mode)',
-        // In dev mode, we can show the OTP in console for convenience
-        _devOtp: otp, // Only visible in dev mode responses
-      });
+    console.log('send-otp: ✅ Mock OTP "sent" successfully (no actual SMS)');
+    return res.status(200).json({
+      success: true,
+      message: 'OTP sent successfully (Mock Mode - Use code: 123456)',
+      _devOtp: otp, // Show OTP in response for testing
+    });
+  }
+
+  // Production mode - require Fast2SMS API key
+  if (!FAST2SMS_API_KEY) {
+    console.error('send-otp: Missing VERCEL_FAST2SMS_API_KEY environment variable');
+    return res.status(500).json({ 
+      success: false,
+      error: 'Fast2SMS API key not configured. Please set VERCEL_FAST2SMS_API_KEY environment variable.' 
+    });
+  }
+
+  try {
+    // Production mode - generate random OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiryTime = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
+
+    // Store OTP in Firebase Realtime Database
+    try {
+      const db = getDatabase();
+      if (db) {
+        const otpRef = db.ref(`otps/${mobileNumber}`);
+        await otpRef.set({
+          otp: otp,
+          createdAt: Date.now(),
+          expiresAt: expiryTime,
+          attempts: 0,
+        });
+
+        // Auto-delete OTP after expiry
+        setTimeout(async () => {
+          try {
+            await otpRef.remove();
+          } catch (err) {
+            console.error('Error deleting expired OTP:', err);
+          }
+        }, OTP_EXPIRY_MINUTES * 60 * 1000);
+      }
+    } catch (firebaseError: any) {
+      console.warn('send-otp: Firebase error (continuing):', firebaseError.message);
+      // Continue even if Firebase fails
     }
 
     // Send OTP via Fast2SMS (production mode)

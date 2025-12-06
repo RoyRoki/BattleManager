@@ -1,9 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, query, where, orderBy, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, orderBy, updateDoc, doc } from 'firebase/firestore';
 import { firestore } from '../../services/firebaseService';
-import { PAYMENT_STATUS } from '../../utils/constants';
 import { useSupportChat } from '../../hooks/useSupportChat';
 import { SupportChatInterface } from '../../components/support-chat-interface';
 import { useFirestoreTransaction } from '../../hooks/useFirestoreTransaction';
@@ -35,12 +34,17 @@ export const AdminNotifications: React.FC = () => {
   const { addPoints } = useFirestoreTransaction();
 
   // Fetch all payments
-  const [payments, loading] = useCollection(
+  const [payments, loading, error] = useCollection(
     query(
       collection(firestore, 'payments'),
       orderBy('created_at', 'desc')
     )
-  ) as unknown as [{ docs: any[] } | null, boolean];
+  ) as unknown as [{ docs: any[] } | null, boolean, Error | undefined];
+  
+  // Log errors for debugging
+  if (error) {
+    console.error('AdminNotifications: Firestore error:', error);
+  }
 
   // Support chat hook for admin
   const { supportChats, isLoadingChats } = useSupportChat();
@@ -178,6 +182,16 @@ export const AdminNotifications: React.FC = () => {
           <h1 className="text-3xl font-heading text-primary mb-2">Notifications</h1>
           <p className="text-gray-400">Real-time dashboard for pending actions</p>
         </motion.div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="bg-accent bg-opacity-20 border border-accent rounded-lg p-4 mb-6">
+            <p className="text-accent font-body">
+              ⚠️ Unable to load notification data. Please check your connection and refresh the page.
+            </p>
+            <p className="text-xs text-gray-400 mt-2">Error: {error.message || 'Unknown error'}</p>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex space-x-2 mb-6 border-b border-gray-800">
@@ -382,9 +396,9 @@ export const AdminNotifications: React.FC = () => {
                             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-bg font-heading font-bold">
                               {chat.user_name?.[0]?.toUpperCase() || <HiUser className="w-6 h-6" />}
                             </div>
-                            {chat.unread_count > 0 && (
+                            {(chat.unread_count ?? 0) > 0 && (
                               <div className="absolute -top-1 -right-1 w-5 h-5 bg-accent rounded-full flex items-center justify-center text-xs text-white font-bold">
-                                {chat.unread_count > 9 ? '9+' : chat.unread_count}
+                                {(chat.unread_count ?? 0) > 9 ? '9+' : (chat.unread_count ?? 0)}
                               </div>
                             )}
                           </div>

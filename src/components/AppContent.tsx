@@ -13,13 +13,14 @@ export const AppContent: React.FC = () => {
   // Check if we're on an admin route
   const isAdminRoute = location.pathname.startsWith('/admin');
   
-  // Hide header on inner screens (Support, Profile, Notifications, Chat, Tournament Detail)
+  // Hide header on inner screens (Support, Profile, Notifications, Chat, Tournament Detail, Tournament History)
   // Also hide on admin routes (admin pages have their own headers)
   const hideHeader =
     location.pathname === ROUTES.SUPPORT ||
     location.pathname === ROUTES.PROFILE ||
     location.pathname === ROUTES.NOTIFICATIONS ||
     location.pathname === ROUTES.CHAT ||
+    location.pathname === ROUTES.TOURNAMENT_HISTORY ||
     location.pathname.startsWith('/tournament/') ||
     isAdminRoute;
 

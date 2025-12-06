@@ -57,7 +57,7 @@ export const BannerCarousel: React.FC<BannerCarouselProps> = ({ banners }) => {
     setCurrentIndex((prev) => (prev + 1) % activeBanners.length);
   };
 
-  const handleDragEnd = (event: any, info: any) => {
+  const handleDragEnd = (_event: any, info: any) => {
     const threshold = 50; // Minimum drag distance to trigger slide change
     const velocity = info.velocity.x;
 

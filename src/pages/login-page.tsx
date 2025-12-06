@@ -54,16 +54,34 @@ export const LoginPage: React.FC = () => {
       mobileSchema.parse(mobileNumber);
       
       console.log('Checking if user exists');
-      // Check if user exists - handle errors gracefully
-      // checkUserExists already has timeout handling built-in
+      // Check if user exists - handle errors properly
       let userExists = false;
       try {
         userExists = await checkUserExists(mobileNumber);
         console.log('User exists check completed:', userExists);
       } catch (checkError: any) {
-        console.warn('Error checking user existence, proceeding as new user:', checkError);
-        // If we can't check, assume new user and proceed
-        userExists = false;
+        console.error('Error checking user existence:', checkError);
+        // If check fails due to network/timeout, show error and don't proceed
+        // This prevents existing users from being shown signup screen
+        const errorMessage = checkError.message || 'Failed to check user. Please try again.';
+        
+        // Check if it's a network/timeout error
+        if (
+          errorMessage.includes('timeout') ||
+          errorMessage.includes('connection') ||
+          errorMessage.includes('network') ||
+          checkError.code === 'unavailable' ||
+          checkError.code === 'deadline-exceeded'
+        ) {
+          toast.error('Connection issue. Please check your internet and try again.');
+        } else {
+          toast.error(errorMessage);
+        }
+        
+        // Don't proceed with OTP if we can't check user existence
+        // User should retry after fixing connection
+        setIsCheckingUser(false);
+        return;
       }
       
       setIsNewUser(!userExists);

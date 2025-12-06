@@ -1,5 +1,20 @@
 export type TournamentStatus = 'upcoming' | 'live' | 'completed' | 'cancelled';
 
+export interface PlayerKill {
+  kills: number;
+  updated_at: Date;
+  points_credited?: number; // Points credited for this player
+  credited_at?: Date; // When points were credited
+}
+
+export interface TournamentPayment {
+  points_per_kill: number; // Points awarded per kill
+  total_paid: number; // Total points paid out
+  paid_at: Date; // When payment was made
+  paid_by: string; // Admin email who made the payment
+  custom_credits?: Record<string, number>; // mobile_no -> custom points
+}
+
 export interface Tournament {
   id: string;
   name: string;
@@ -11,7 +26,11 @@ export interface Tournament {
   reveal_time?: Date;
   status: TournamentStatus;
   banner_url?: string;
-  encrypted_credentials?: string;
+  encrypted_credentials?: string; // Legacy field - kept for backward compatibility
+  ff_id_encrypted?: string;
+  ff_password_encrypted?: string;
+  player_kills?: Record<string, PlayerKill>; // mobile_no -> PlayerKill
+  payment_info?: TournamentPayment; // Payment tracking
   created_at: Date;
   updated_at: Date;
   created_by: string; // Admin email

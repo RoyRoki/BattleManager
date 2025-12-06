@@ -6,17 +6,35 @@ import { User } from '../../types';
 import { motion } from 'framer-motion';
 
 export const UserManagement: React.FC = () => {
-  const [users, loading] = useCollection(
+  const [users, loading, error] = useCollection(
     collection(firestore, 'users')
-  ) as unknown as [{ docs: any[] } | null, boolean];
+  ) as unknown as [{ docs: any[] } | null, boolean, Error | undefined];
+  
+  // Log errors for debugging
+  if (error) {
+    console.error('UserManagement: Firestore error:', error);
+  }
 
   return (
     <div className="min-h-screen bg-bg pb-20">
       <div className="container mx-auto px-4 py-6">
         <h1 className="text-3xl font-heading text-primary mb-6 text-glow">User Management</h1>
 
+        {/* Error Message */}
+        {error && (
+          <div className="bg-accent bg-opacity-20 border border-accent rounded-lg p-4 mb-6">
+            <p className="text-accent font-body">
+              ⚠️ Unable to load user data. Please check your connection and refresh the page.
+            </p>
+            <p className="text-xs text-gray-400 mt-2">Error: {error.message || 'Unknown error'}</p>
+          </div>
+        )}
+
         {loading ? (
-          <div className="text-center py-8 text-gray-400">Loading...</div>
+          <div className="text-center py-8">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            <p className="text-gray-400">Loading users...</p>
+          </div>
         ) : (
           <div className="space-y-4">
             {users?.docs.map((doc: any) => {

@@ -8,10 +8,20 @@ import { Banner } from '../types/Banner';
 import { useAuth } from '../contexts/AuthContext';
 import { BannerCarousel } from '../components/banner-carousel';
 import { motion } from 'framer-motion';
-import { HiCalendar } from 'react-icons/hi';
+import { HiCalendar, HiClock } from 'react-icons/hi';
+import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../utils/constants';
 
 export const HomePage: React.FC = () => {
   const { user, isLoading } = useAuth();
+  const navigate = useNavigate();
+  
+  // Redirect to login if not authenticated (after loading completes)
+  React.useEffect(() => {
+    if (!isLoading && !user) {
+      navigate(ROUTES.LOGIN, { replace: true });
+    }
+  }, [user, isLoading, navigate]);
   
   // Query all active tournaments (upcoming, live) - filter server-side, sort client-side
   const [tournaments, loading, error] = useCollection(
@@ -30,12 +40,15 @@ export const HomePage: React.FC = () => {
   ) as unknown as [{ docs: any[] } | null, boolean];
 
   // Query banners - filter active banners server-side
-  const [banners, bannersLoading, bannersError] = useCollection(
-    query(
-      collection(firestore, 'banners'),
-      where('is_active', '==', true)
-    )
-  );
+  // Only query if firestore is initialized
+  const [banners, bannersLoading] = useCollection(
+    firestore && import.meta.env.VITE_FIREBASE_PROJECT_ID
+      ? query(
+          collection(firestore, 'banners'),
+          where('is_active', '==', true)
+        )
+      : null
+  ) as unknown as [{ docs: any[] } | null, boolean, Error | undefined];
 
   // Convert banners to Banner type (already filtered by is_active on server)
   // Sort by order field client-side
@@ -65,7 +78,8 @@ export const HomePage: React.FC = () => {
       .sort((a, b) => a.order - b.order) || [];
 
   // Show loading state while checking auth or loading tournaments
-  if (loading || isLoading) {
+  // Also show loading if user is not authenticated (will redirect)
+  if (loading || isLoading || !user) {
     return (
       <div className="flex items-center justify-center h-screen bg-bg">
         <div className="text-center">
@@ -110,13 +124,25 @@ export const HomePage: React.FC = () => {
 
       <div className="container mx-auto px-4 py-6">
 
-        <motion.h1
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-3xl font-heading text-primary mb-6 text-glow"
-        >
-          Free Fire Tournaments
-        </motion.h1>
+        <div className="flex items-center justify-between mb-6">
+          <motion.h1
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-3xl font-heading text-primary text-glow"
+          >
+            Free Fire Tournaments
+          </motion.h1>
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={() => navigate(ROUTES.TOURNAMENT_HISTORY)}
+            className="flex items-center gap-2 px-4 py-2 bg-bg-secondary border border-primary/30 rounded-lg hover:border-primary transition-colors"
+            title="View Tournament History"
+          >
+            <HiClock className="w-5 h-5 text-primary" />
+            <span className="text-primary font-heading text-sm hidden sm:inline">History</span>
+          </motion.button>
+        </div>
 
         {tournaments && tournaments.docs.length > 0 ? (
           <>
@@ -147,7 +173,7 @@ export const HomePage: React.FC = () => {
                 })
                 .sort((a, b) => {
                   // Sort by status priority (live first, then upcoming), then by start time
-                  const statusOrder = { live: 0, upcoming: 1 };
+                  const statusOrder: Record<string, number> = { live: 0, upcoming: 1, completed: 2, cancelled: 3 };
                   const statusDiff = (statusOrder[a.status] ?? 2) - (statusOrder[b.status] ?? 2);
                   return statusDiff !== 0 ? statusDiff : a.start_time.getTime() - b.start_time.getTime();
                 })

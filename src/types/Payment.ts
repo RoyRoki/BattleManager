@@ -1,12 +1,12 @@
 export type PaymentStatus = 'pending' | 'approved' | 'rejected';
-export type PaymentType = 'add_money' | 'withdrawal';
+export type PaymentType = 'add_money' | 'withdrawal' | 'tournament_winning';
 
 export interface Payment {
   id: string;
   user_mobile: string;
   user_name?: string;
   amount: number;
-  type?: PaymentType; // 'add_money' or 'withdrawal'
+  type?: PaymentType; // 'add_money', 'withdrawal', or 'tournament_winning'
   upi_id?: string;
   bank_account_no?: string;
   ifsc_code?: string;
@@ -16,6 +16,8 @@ export interface Payment {
   final_amount?: number; // Final amount after commission deduction
   approved_by?: string; // Admin email
   approved_at?: Date;
+  tournament_id?: string; // Tournament ID for tournament winnings
+  tournament_name?: string; // Tournament name for display
   created_at: Date;
   updated_at: Date;
   notes?: string;

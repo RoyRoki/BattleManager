@@ -27,7 +27,6 @@ export const MoneyPage: React.FC = () => {
   const [bankAccountNo, setBankAccountNo] = useState('');
   const [ifscCode, setIfscCode] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [withdrawalStatus, setWithdrawalStatus] = useState<'idle' | 'pending'>('idle');
   const [fieldErrors, setFieldErrors] = useState<{
     bank_account_no?: string;
     ifsc_code?: string;
@@ -38,8 +37,7 @@ export const MoneyPage: React.FC = () => {
     user
       ? query(
           collection(firestore, 'payments'),
-          where('user_mobile', '==', user.mobile_no),
-          where('status', 'in', ['pending', 'approved', 'rejected'])
+          where('user_mobile', '==', user.mobile_no)
         )
       : null
   ) as unknown as [{ docs: any[] } | null, boolean]) || [null, true];
@@ -165,8 +163,7 @@ export const MoneyPage: React.FC = () => {
         updated_at: new Date(),
       });
 
-      setWithdrawalStatus('pending');
-      toast.success('Please wait, your amount will be credited soon', { duration: 5000 });
+      toast.success('Withdrawal request submitted successfully!', { duration: 5000 });
       
       // Reset form
       setSelectedWithdrawAmount(null);
@@ -316,28 +313,7 @@ export const MoneyPage: React.FC = () => {
               Minimum withdrawal: {MIN_WITHDRAW} points | Commission: {withdrawalCommission}%
             </p>
 
-            {withdrawalStatus === 'pending' ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-bg border border-primary/30 rounded-lg p-6 text-center"
-              >
-                <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <h4 className="text-lg font-heading text-primary mb-2">
-                  Please wait, your amount will be credited soon
-                </h4>
-                <p className="text-sm text-gray-400">
-                  Your withdrawal request is being processed. Admin will verify and complete the transfer.
-                </p>
-                <button
-                  onClick={() => setWithdrawalStatus('idle')}
-                  className="mt-4 text-primary text-sm hover:underline"
-                >
-                  Submit another request
-                </button>
-              </motion.div>
-            ) : (
-              <form onSubmit={handleWithdraw} className="space-y-4">
+            <form onSubmit={handleWithdraw} className="space-y-4">
                 {/* Preset Amount Buttons */}
                 <div>
                   <label className="block text-sm mb-2">Select Amount (Points)</label>
@@ -461,7 +437,6 @@ export const MoneyPage: React.FC = () => {
                   )}
                 </button>
               </form>
-            )}
           </motion.div>
         )}
 
@@ -476,30 +451,41 @@ export const MoneyPage: React.FC = () => {
               <div className="text-center py-8 text-gray-400">Loading...</div>
             ) : payments && payments.docs.length > 0 ? (
               <div className="space-y-3">
-                {payments.docs.map((doc: any) => {
-                  const data = doc.data();
-                  const payment = {
-                    id: doc.id,
-                    ...data,
-                    created_at:
-                      data.created_at instanceof Date
-                        ? data.created_at
-                        : (data.created_at as any)?.toDate?.() || new Date(),
-                    updated_at:
-                      data.updated_at instanceof Date
-                        ? data.updated_at
-                        : (data.updated_at as any)?.toDate?.() || new Date(),
-                    approved_at:
-                      data.approved_at instanceof Date
-                        ? data.approved_at
-                        : (data.approved_at as any)?.toDate?.() || undefined,
-                  } as Payment;
+                {payments.docs
+                  .map((doc: any) => {
+                    const data = doc.data();
+                    return {
+                      id: doc.id,
+                      ...data,
+                      created_at:
+                        data.created_at instanceof Date
+                          ? data.created_at
+                          : (data.created_at as any)?.toDate?.() || new Date(),
+                      updated_at:
+                        data.updated_at instanceof Date
+                          ? data.updated_at
+                          : (data.updated_at as any)?.toDate?.() || new Date(),
+                      approved_at:
+                        data.approved_at instanceof Date
+                          ? data.approved_at
+                          : (data.approved_at as any)?.toDate?.() || undefined,
+                    } as Payment;
+                  })
+                  .sort((a, b) => {
+                    // Sort by status: pending first, then by time (most recent first)
+                    if (a.status === 'pending' && b.status !== 'pending') return -1;
+                    if (a.status !== 'pending' && b.status === 'pending') return 1;
+                    // Both have same status priority, sort by time (most recent first)
+                    return b.created_at.getTime() - a.created_at.getTime();
+                  })
+                  .map((payment) => {
 
-                  const isWithdrawal = data.type === 'withdrawal';
+                  const isWithdrawal = payment.type === 'withdrawal';
+                  const isTournamentWinning = payment.type === 'tournament_winning';
 
                   return (
                     <div
-                      key={doc.id}
+                      key={payment.id}
                       className="bg-bg border border-gray-700 rounded-lg p-4"
                     >
                       <div className="flex justify-between items-start mb-2">
@@ -513,7 +499,13 @@ export const MoneyPage: React.FC = () => {
                             {payment.amount} points
                           </p>
                           <p className="text-xs text-gray-500">
-                            {isWithdrawal ? 'Withdrawal' : 'Add Money'}
+                            {isWithdrawal 
+                              ? 'Withdrawal' 
+                              : isTournamentWinning 
+                              ? payment.tournament_name 
+                                ? `Tournament Win: ${payment.tournament_name}`
+                                : 'Tournament Win'
+                              : 'Add Money'}
                           </p>
                           <p className="text-sm text-gray-400">
                             {payment.created_at.toLocaleDateString()}

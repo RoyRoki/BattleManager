@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BannerManagement } from '../../components/admin/banner-management';
-import { HiChevronDown, HiChevronUp } from 'react-icons/hi';
+import { HiChevronDown } from 'react-icons/hi';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import toast from 'react-hot-toast';
 

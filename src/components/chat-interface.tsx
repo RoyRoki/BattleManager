@@ -189,7 +189,7 @@ export const ChatInterface: React.FC = () => {
         )}
 
         <AnimatePresence mode="popLayout">
-          {messageGroups.map((group, groupIndex) => (
+          {messageGroups.map((group) => (
             <React.Fragment key={`group-${group.date.getTime()}`}>
               {/* Date Separator */}
               <motion.div
@@ -207,7 +207,7 @@ export const ChatInterface: React.FC = () => {
               </motion.div>
 
               {/* Messages in Group */}
-              {group.messages.map((msg, msgIndex) => {
+              {group.messages.map((msg) => {
                 const isOwnMessage = msg.user_mobile === user?.mobile_no;
                 const showAvatar = !isOwnMessage;
                 const isAdmin = msg.is_admin;

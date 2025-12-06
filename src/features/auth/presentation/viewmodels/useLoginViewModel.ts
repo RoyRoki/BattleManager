@@ -98,14 +98,35 @@ export const useLoginViewModel = (): LoginViewModelState & LoginViewModelHandler
       mobileSchema.parse(mobileNumber);
 
       console.log('useLoginViewModel: Checking if user exists');
-      // Check if user exists - handle errors gracefully
+      // Check if user exists - handle errors properly
       let userExists = false;
       try {
         userExists = await checkUserExistsUseCase.execute(mobileNumber);
         console.log('useLoginViewModel: User exists check completed:', userExists);
       } catch (checkError: any) {
-        console.warn('useLoginViewModel: Error checking user existence, proceeding as new user:', checkError);
-        userExists = false;
+        console.error('useLoginViewModel: Error checking user existence:', checkError);
+        // If check fails due to network/timeout, show error and don't proceed
+        // This prevents existing users from being shown signup screen
+        const errorMessage = checkError.message || 'Failed to check user. Please try again.';
+        
+        // Check if it's a network/timeout error
+        if (
+          errorMessage.includes('timeout') ||
+          errorMessage.includes('connection') ||
+          errorMessage.includes('network') ||
+          checkError.code === 'unavailable' ||
+          checkError.code === 'deadline-exceeded'
+        ) {
+          toast.error('Connection issue. Please check your internet and try again.');
+        } else {
+          toast.error(errorMessage);
+        }
+        
+        // Don't proceed with OTP if we can't check user existence
+        // User should retry after fixing connection
+        setIsCheckingUser(false);
+        setIsLoading(false);
+        return;
       }
 
       setIsNewUser(!userExists);
