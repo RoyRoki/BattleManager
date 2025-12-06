@@ -13,13 +13,21 @@ import { HiCalendar } from 'react-icons/hi';
 export const HomePage: React.FC = () => {
   const { user, isLoading } = useAuth();
   
-  // Query tournaments - filter server-side, sort client-side to avoid index requirement
+  // Query all active tournaments (upcoming, live) - filter server-side, sort client-side
   const [tournaments, loading, error] = useCollection(
     query(
       collection(firestore, 'tournaments'),
       where('status', 'in', ['upcoming', 'live'])
     )
   ) as unknown as [{ docs: any[] } | null, boolean, Error | undefined];
+
+  // Query completed tournaments for reference
+  const [completedTournaments] = useCollection(
+    query(
+      collection(firestore, 'tournaments'),
+      where('status', '==', 'completed')
+    )
+  ) as unknown as [{ docs: any[] } | null, boolean];
 
   // Query banners - filter active banners server-side
   const [banners, bannersLoading, bannersError] = useCollection(
@@ -111,43 +119,93 @@ export const HomePage: React.FC = () => {
         </motion.h1>
 
         {tournaments && tournaments.docs.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {tournaments.docs
-              .map((doc: any) => {
-                const data = doc.data();
-                return {
-                  id: doc.id,
-                  ...data,
-                  start_time:
-                    data.start_time instanceof Date
-                      ? data.start_time
-                      : (data.start_time as any)?.toDate?.() || new Date(),
-                  reveal_time:
-                    data.reveal_time instanceof Date
-                      ? data.reveal_time
-                      : (data.reveal_time as any)?.toDate?.() || undefined,
-                  created_at:
-                    data.created_at instanceof Date
-                      ? data.created_at
-                      : (data.created_at as any)?.toDate?.() || new Date(),
-                  updated_at:
-                    data.updated_at instanceof Date
-                      ? data.updated_at
-                      : (data.updated_at as any)?.toDate?.() || new Date(),
-                } as Tournament;
-              })
-              .sort((a, b) => a.start_time.getTime() - b.start_time.getTime()) // Sort client-side
-              .map((tournament, index: number) => (
-                <motion.div
-                  key={tournament.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <TournamentCard tournament={tournament} />
-                </motion.div>
-              ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {tournaments.docs
+                .map((doc: any) => {
+                  const data = doc.data();
+                  return {
+                    id: doc.id,
+                    ...data,
+                    start_time:
+                      data.start_time instanceof Date
+                        ? data.start_time
+                        : (data.start_time as any)?.toDate?.() || new Date(),
+                    reveal_time:
+                      data.reveal_time instanceof Date
+                        ? data.reveal_time
+                        : (data.reveal_time as any)?.toDate?.() || undefined,
+                    created_at:
+                      data.created_at instanceof Date
+                        ? data.created_at
+                        : (data.created_at as any)?.toDate?.() || new Date(),
+                    updated_at:
+                      data.updated_at instanceof Date
+                        ? data.updated_at
+                        : (data.updated_at as any)?.toDate?.() || new Date(),
+                  } as Tournament;
+                })
+                .sort((a, b) => {
+                  // Sort by status priority (live first, then upcoming), then by start time
+                  const statusOrder = { live: 0, upcoming: 1 };
+                  const statusDiff = (statusOrder[a.status] ?? 2) - (statusOrder[b.status] ?? 2);
+                  return statusDiff !== 0 ? statusDiff : a.start_time.getTime() - b.start_time.getTime();
+                })
+                .map((tournament, index: number) => (
+                  <motion.div
+                    key={tournament.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                  >
+                    <TournamentCard tournament={tournament} />
+                  </motion.div>
+                ))}
+            </div>
+            {completedTournaments && completedTournaments.docs.length > 0 && (
+              <div className="mt-12">
+                <h2 className="text-2xl font-heading text-gray-400 mb-4">Completed Tournaments</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {completedTournaments.docs
+                    .map((doc: any) => {
+                      const data = doc.data();
+                      return {
+                        id: doc.id,
+                        ...data,
+                        start_time:
+                          data.start_time instanceof Date
+                            ? data.start_time
+                            : (data.start_time as any)?.toDate?.() || new Date(),
+                        reveal_time:
+                          data.reveal_time instanceof Date
+                            ? data.reveal_time
+                            : (data.reveal_time as any)?.toDate?.() || undefined,
+                        created_at:
+                          data.created_at instanceof Date
+                            ? data.created_at
+                            : (data.created_at as any)?.toDate?.() || new Date(),
+                        updated_at:
+                          data.updated_at instanceof Date
+                            ? data.updated_at
+                            : (data.updated_at as any)?.toDate?.() || new Date(),
+                      } as Tournament;
+                    })
+                    .sort((a, b) => b.start_time.getTime() - a.start_time.getTime())
+                    .slice(0, 6) // Show only recent 6 completed tournaments
+                    .map((tournament, index: number) => (
+                      <motion.div
+                        key={tournament.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                      >
+                        <TournamentCard tournament={tournament} />
+                      </motion.div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-12">
             <div className="inline-block mb-4">

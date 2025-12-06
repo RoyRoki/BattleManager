@@ -33,6 +33,12 @@ export const AdminDashboard: React.FC = () => {
       link: ROUTES.ADMIN_PAYMENTS,
       color: 'accent',
     },
+    {
+      label: 'Support Chats',
+      value: '💬',
+      link: ROUTES.ADMIN_SUPPORT_CHAT,
+      color: 'primary',
+    },
   ];
 
   return (
@@ -90,6 +96,16 @@ export const AdminDashboard: React.FC = () => {
             >
               <h3 className="text-xl font-heading text-accent mb-2">Manage Payments</h3>
               <p className="text-gray-400">Approve or reject payment requests</p>
+            </motion.div>
+          </Link>
+
+          <Link to={ROUTES.ADMIN_SUPPORT_CHAT}>
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              className="bg-bg-secondary border border-primary rounded-lg p-6"
+            >
+              <h3 className="text-xl font-heading text-primary mb-2">Support Chat</h3>
+              <p className="text-gray-400">Respond to user support messages</p>
             </motion.div>
           </Link>
         </div>

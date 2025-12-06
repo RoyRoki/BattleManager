@@ -133,4 +133,25 @@ h3.text-glow,
   background: #FFD700;
 }
 
+/* DateTime input styling - make icons yellow */
+input[type="datetime-local"],
+input[type="date"],
+input[type="time"] {
+  color-scheme: dark;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(75%) sepia(60%) saturate(500%) hue-rotate(360deg) brightness(110%);
+  cursor: pointer;
+  opacity: 1;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  filter: invert(85%) sepia(70%) saturate(600%) hue-rotate(360deg) brightness(120%);
+}
+
 

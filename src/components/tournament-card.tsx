@@ -1,15 +1,34 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Tournament } from '../types';
+import { Tournament, TournamentStatus } from '../types';
 
 interface TournamentCardProps {
   tournament: Tournament;
 }
 
+// Compute effective status based on reveal_time
+const getEffectiveStatus = (tournament: Tournament): TournamentStatus => {
+  // If manually set to completed or cancelled, respect that
+  if (tournament.status === 'completed' || tournament.status === 'cancelled') {
+    return tournament.status;
+  }
+  
+  // If reveal_time has passed and status is upcoming, show as live
+  if (tournament.status === 'upcoming' && tournament.reveal_time) {
+    const now = new Date();
+    if (now >= new Date(tournament.reveal_time)) {
+      return 'live';
+    }
+  }
+  
+  return tournament.status;
+};
+
 export const TournamentCard: React.FC<TournamentCardProps> = ({ tournament }) => {
   const progress = (tournament.current_players / tournament.max_players) * 100;
   const isFull = tournament.current_players >= tournament.max_players;
+  const effectiveStatus = getEffectiveStatus(tournament);
 
   return (
     <Link to={`/tournament/${tournament.id}`}>
@@ -65,15 +84,19 @@ export const TournamentCard: React.FC<TournamentCardProps> = ({ tournament }) =>
 
           <div className="flex items-center justify-between">
             <span
-              className={`text-xs px-2 py-1 rounded ${
-                tournament.status === 'upcoming'
+              className={`text-xs px-2 py-1 rounded font-heading ${
+                effectiveStatus === 'upcoming'
                   ? 'bg-orange-900 text-orange-300'
-                  : tournament.status === 'live'
-                  ? 'bg-orange-950 text-orange-400'
+                  : effectiveStatus === 'live'
+                  ? 'bg-green-900 text-green-300 animate-pulse'
+                  : effectiveStatus === 'completed'
+                  ? 'bg-blue-900 text-blue-300'
+                  : effectiveStatus === 'cancelled'
+                  ? 'bg-red-900 text-red-300'
                   : 'bg-gray-800 text-gray-400'
               }`}
             >
-              {tournament.status.toUpperCase()}
+              {effectiveStatus.toUpperCase()}
             </span>
             <span className="text-xs text-gray-400">
               {new Date(tournament.start_time).toLocaleDateString()}

@@ -28,6 +28,17 @@ export const upiIdSchema = z
   .string()
   .regex(/^[\w.-]+@[\w.-]+$/, 'Invalid UPI ID format');
 
+// Bank Account Number validation (9-18 digits)
+export const bankAccountNoSchema = z
+  .string()
+  .regex(/^\d{9,18}$/, 'Bank account number must be 9-18 digits');
+
+// IFSC Code validation (11 characters: 4 letters + 0 + 6 alphanumeric)
+export const ifscCodeSchema = z
+  .string()
+  .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'Invalid IFSC code format (e.g., ABCD0123456)')
+  .transform((val) => val.toUpperCase());
+
 // Tournament name validation
 export const tournamentNameSchema = z
   .string()
@@ -74,13 +85,14 @@ export const tournamentSchema = z.object({
 export const paymentSchema = z.object({
   amount: paymentAmountSchema,
   upi_id: upiIdSchema.optional(),
-  proof_url: z.string().url('Invalid proof URL'),
+  proof_url: z.string().url('Invalid proof URL').optional(),
 });
 
 // Withdrawal request schema
 export const withdrawalSchema = z.object({
   amount: paymentAmountSchema,
-  upi_id: upiIdSchema,
+  bank_account_no: bankAccountNoSchema,
+  ifsc_code: ifscCodeSchema,
 });
 
 

@@ -29,9 +29,14 @@ export const ChatPage: React.FC = () => {
             Global Chat
           </motion.h1>
         </div>
-        <div className="bg-bg-secondary border border-gray-800 rounded-lg h-[calc(100vh-200px)]">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-bg-secondary border border-gray-800 rounded-xl overflow-hidden shadow-2xl shadow-black/50 h-[calc(100vh-200px)]"
+        >
           <ChatInterface />
-        </div>
+        </motion.div>
       </div>
     </div>
   );

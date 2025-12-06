@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useEnrollTournament } from '../hooks/useEnrollTournament';
 import { useAuth } from '../contexts/AuthContext';
 import { usePoints } from '../contexts/PointsContext';
-import { Tournament } from '../types';
+import { Tournament, TournamentStatus } from '../types';
 // import { Howl } from 'howler'; // TODO: Add sound files
 
 interface EnrollButtonProps {
@@ -18,6 +18,20 @@ const playEnrollSound = () => {
   // sound.play();
 };
 
+// Compute effective status based on reveal_time
+const getEffectiveStatus = (tournament: Tournament): TournamentStatus => {
+  if (tournament.status === 'completed' || tournament.status === 'cancelled') {
+    return tournament.status;
+  }
+  if (tournament.status === 'upcoming' && tournament.reveal_time) {
+    const now = new Date();
+    if (now >= new Date(tournament.reveal_time)) {
+      return 'live';
+    }
+  }
+  return tournament.status;
+};
+
 export const EnrollButton: React.FC<EnrollButtonProps> = ({
   tournament,
   onEnrollSuccess,
@@ -25,6 +39,7 @@ export const EnrollButton: React.FC<EnrollButtonProps> = ({
   const { user } = useAuth();
   const { points } = usePoints();
   const { enroll, isEnrolling } = useEnrollTournament();
+  const effectiveStatus = getEffectiveStatus(tournament);
 
   const handleEnroll = async () => {
     if (!user) {
@@ -43,7 +58,7 @@ export const EnrollButton: React.FC<EnrollButtonProps> = ({
     points >= tournament.entry_amount &&
     !user.enrolled_tournaments.includes(tournament.id) &&
     tournament.current_players < tournament.max_players &&
-    tournament.status === 'upcoming';
+    (effectiveStatus === 'upcoming' || effectiveStatus === 'live');
 
   return (
     <motion.button
@@ -61,12 +76,18 @@ export const EnrollButton: React.FC<EnrollButtonProps> = ({
         ? 'Enrolling...'
         : !user
         ? 'Login to Enroll'
+        : effectiveStatus === 'completed'
+        ? 'Tournament Completed'
+        : effectiveStatus === 'cancelled'
+        ? 'Tournament Cancelled'
         : points < tournament.entry_amount
         ? 'Insufficient Points'
         : user.enrolled_tournaments.includes(tournament.id)
         ? 'Already Enrolled'
         : tournament.current_players >= tournament.max_players
         ? 'Tournament Full'
+        : effectiveStatus === 'live'
+        ? 'Join Live Tournament'
         : 'Enroll Now'}
     </motion.button>
   );

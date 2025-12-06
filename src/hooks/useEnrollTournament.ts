@@ -4,8 +4,22 @@ import { firestore } from '../services/firebaseService';
 import { useFirestoreTransaction } from './useFirestoreTransaction';
 import { useAuth } from '../contexts/AuthContext';
 import { usePoints } from '../contexts/PointsContext';
-import { Tournament } from '../types';
+import { Tournament, TournamentStatus } from '../types';
 import toast from 'react-hot-toast';
+
+// Compute effective status based on reveal_time
+const getEffectiveStatus = (tournament: Tournament): TournamentStatus => {
+  if (tournament.status === 'completed' || tournament.status === 'cancelled') {
+    return tournament.status;
+  }
+  if (tournament.status === 'upcoming' && tournament.reveal_time) {
+    const now = new Date();
+    if (now >= new Date(tournament.reveal_time)) {
+      return 'live';
+    }
+  }
+  return tournament.status;
+};
 
 export const useEnrollTournament = () => {
   const { user } = useAuth();
@@ -34,7 +48,9 @@ export const useEnrollTournament = () => {
       return false;
     }
 
-    if (tournament.status !== 'upcoming') {
+    // Use effective status to allow enrollment in auto-live tournaments
+    const effectiveStatus = getEffectiveStatus(tournament);
+    if (effectiveStatus !== 'upcoming' && effectiveStatus !== 'live') {
       toast.error('Tournament is not available for enrollment');
       return false;
     }

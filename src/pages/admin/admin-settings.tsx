@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BannerManagement } from '../../components/admin/banner-management';
 import { HiChevronDown, HiChevronUp } from 'react-icons/hi';
+import { useAppSettings } from '../../hooks/useAppSettings';
+import toast from 'react-hot-toast';
 
 interface SettingsSectionProps {
   title: string;
@@ -67,6 +69,71 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   );
 };
 
+const CommissionSettings: React.FC = () => {
+  const { withdrawalCommission, loading, updateWithdrawalCommission } = useAppSettings();
+  const [commission, setCommission] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  React.useEffect(() => {
+    if (withdrawalCommission !== undefined) {
+      setCommission(withdrawalCommission.toString());
+    }
+  }, [withdrawalCommission]);
+
+  const handleSave = async () => {
+    const commissionNum = parseFloat(commission);
+    if (isNaN(commissionNum) || commissionNum < 0 || commissionNum > 100) {
+      toast.error('Please enter a valid commission percentage (0-100)');
+      return;
+    }
+
+    setIsSaving(true);
+    const success = await updateWithdrawalCommission(commissionNum);
+    setIsSaving(false);
+    if (success) {
+      setCommission(commissionNum.toString());
+    }
+  };
+
+  if (loading) {
+    return <div className="text-gray-400">Loading settings...</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Withdrawal Commission (%)
+        </label>
+        <div className="flex gap-3">
+          <input
+            type="number"
+            value={commission}
+            onChange={(e) => setCommission(e.target.value)}
+            min="0"
+            max="100"
+            step="0.1"
+            placeholder="Enter commission percentage"
+            className="flex-1 bg-bg border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary"
+          />
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleSave}
+            disabled={isSaving || commission === withdrawalCommission?.toString()}
+            className="bg-primary text-bg px-6 py-2 rounded-lg font-heading hover:bg-opacity-80 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? 'Saving...' : 'Save'}
+          </motion.button>
+        </div>
+        <p className="text-xs text-gray-500 mt-2">
+          Current commission: {withdrawalCommission}% (This percentage will be deducted from withdrawal amounts)
+        </p>
+      </div>
+    </div>
+  );
+};
+
 export const AdminSettings: React.FC = () => {
   return (
     <div className="min-h-screen bg-bg text-white pb-20">
@@ -92,10 +159,10 @@ export const AdminSettings: React.FC = () => {
 
           <SettingsSection
             title="Commission Rates"
-            description="Configure commission rates for tournaments"
+            description="Configure withdrawal commission percentage"
             delay={0.2}
           >
-            <p className="text-sm text-gray-500">Feature coming soon...</p>
+            <CommissionSettings />
           </SettingsSection>
 
           <SettingsSection

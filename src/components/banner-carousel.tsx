@@ -11,7 +11,7 @@ interface BannerCarouselProps {
 export const BannerCarousel: React.FC<BannerCarouselProps> = ({ banners }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const navigate = useNavigate();
-  const [dragStart, setDragStart] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
 
   // Filter only active banners and sort by order
@@ -62,6 +62,7 @@ export const BannerCarousel: React.FC<BannerCarouselProps> = ({ banners }) => {
     const velocity = info.velocity.x;
 
     if (Math.abs(info.offset.x) > threshold || Math.abs(velocity) > 500) {
+      setIsDragging(true);
       setIsPaused(true);
       if (info.offset.x > 0 || velocity > 0) {
         goToPrevious();
@@ -69,6 +70,8 @@ export const BannerCarousel: React.FC<BannerCarouselProps> = ({ banners }) => {
         goToNext();
       }
     }
+    // Reset dragging state after a short delay
+    setTimeout(() => setIsDragging(false), 100);
   };
 
   const handleBannerClick = (banner: Banner) => {
@@ -94,11 +97,10 @@ export const BannerCarousel: React.FC<BannerCarouselProps> = ({ banners }) => {
           drag="x"
           dragConstraints={{ left: 0, right: 0 }}
           dragElastic={0.2}
-          onDragStart={(event, info) => setDragStart(info.point.x)}
           onDragEnd={handleDragEnd}
           onClick={() => {
-            // Only trigger click if there was no significant drag
-            if (Math.abs(dragStart) < 10) {
+            // Only trigger click if there was no drag
+            if (!isDragging) {
               handleBannerClick(currentBanner);
             }
           }}

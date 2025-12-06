@@ -317,18 +317,30 @@ export const BannerManagement: React.FC = () => {
                 />
               </div>
 
-              {/* Tournament ID */}
+              {/* Tournament Link */}
               <div>
                 <label className="block text-sm font-body text-gray-400 mb-2">
-                  Tournament ID (Optional - links to tournament)
+                  T-Link (Optional - links banner to tournament)
                 </label>
                 <input
                   type="text"
                   value={formData.tournament_id}
-                  onChange={(e) => setFormData({ ...formData, tournament_id: e.target.value })}
-                  placeholder="Tournament ID"
+                  onChange={(e) => {
+                    // Accept both /tournament/ID format and just ID
+                    let value = e.target.value.trim();
+                    // Extract ID from /tournament/ID format if present
+                    const match = value.match(/\/tournament\/(.+)/);
+                    if (match) {
+                      value = match[1];
+                    }
+                    setFormData({ ...formData, tournament_id: value });
+                  }}
+                  placeholder="/tournament/abc123 or abc123"
                   className="w-full px-4 py-2 bg-bg border border-gray-800 rounded-lg text-white focus:outline-none focus:border-primary"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Copy T-Link from Tournament Management page
+                </p>
               </div>
 
               {/* Custom Link */}
