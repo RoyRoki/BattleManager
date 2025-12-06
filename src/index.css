@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-bg text-white font-body antialiased;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+  /* Ensure all SVG icons inherit text color and use orange theme */
+  svg {
+    fill: currentColor;
+  }
+  /* FORCE ORANGE - Override ALL green colors */
+  svg {
+    fill: currentColor !important;
+  }
+  /* Force orange on ALL primary elements - most aggressive */
+  .text-primary,
+  [class*="text-primary"],
+  h1.text-primary,
+  h2.text-primary,
+  h3.text-primary,
+  .font-heading.text-primary {
+    color: #FFBA00 !important;
+  }
+  /* Force orange on ALL primary icons */
+  svg[class*="text-primary"],
+  .text-primary svg,
+  svg.text-primary,
+  [class*="text-primary"] svg,
+  .border-primary svg,
+  [class*="border-primary"] svg,
+  svg[class*="primary"],
+  [class*="primary"] svg {
+    color: #FFBA00 !important;
+    fill: #FFBA00 !important;
+    stroke: #FFBA00 !important;
+  }
+  /* Override ANY green fills in SVG icons */
+  svg[fill="#00FF41"],
+  svg[fill="#00CC33"],
+  svg[fill="rgb(0, 255, 65)"],
+  svg[fill="rgb(0,204,51)"],
+  svg[fill="#00ff41"],
+  svg[fill="#00cc33"],
+  svg[fill*="00FF41"],
+  svg[fill*="00CC33"],
+  svg[style*="00FF41"],
+  svg[style*="00CC33"] {
+    fill: #FFBA00 !important;
+    color: #FFBA00 !important;
+  }
+  /* Force orange borders - override green */
+  .border-primary,
+  [class*="border-primary"],
+  div[class*="border-primary"],
+  .border-primary[class*="border"] {
+    border-color: #FFBA00 !important;
+    box-shadow: 0 0 0 1px #FFBA00 !important;
+  }
+  /* Force orange backgrounds */
+  .bg-primary,
+  [class*="bg-primary"] {
+    background-color: #FFBA00 !important;
+  }
+  /* Override any green text shadows or glows */
+  [style*="00FF41"],
+  [style*="00CC33"],
+  [style*="rgb(0, 255, 65)"],
+  [style*="rgb(0,204,51)"] {
+    color: #FFBA00 !important;
+  }
+}
+
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 10px #FFBA00, 0 0 20px #FFBA00 !important;
+    color: #FFBA00 !important;
+  }
+  .border-glow {
+    box-shadow: 0 0 10px #FFBA00 !important;
+  }
+  .bg-gradient-gaming {
+    background: linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 50%, #0A0A0A 100%);
+  }
+}
+
+/* FORCE ORANGE - Override any green glows, shadows, or colors */
+.text-glow,
+[class*="text-glow"],
+h1.text-glow,
+h2.text-glow,
+h3.text-glow,
+.text-primary.text-glow,
+.font-heading.text-glow {
+  text-shadow: 0 0 10px #FFBA00 !important;
+  text-shadow: 0 0 10px #FFBA00, 0 0 20px #FFBA00 !important;
+  color: #FFBA00 !important;
+}
+/* Override any green text shadows */
+[style*="text-shadow"][style*="00FF41"],
+[style*="text-shadow"][style*="00CC33"],
+[style*="text-shadow"][style*="rgb(0, 255"] {
+  text-shadow: 0 0 10px #FFBA00, 0 0 20px #FFBA00 !important;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0A0A0A;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #FFBA00;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #FFD700;
+}
+
+

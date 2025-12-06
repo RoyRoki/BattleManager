@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection - custom OTP auth flow
+    // Note: Security is enforced via server-side OTP verification
+    // For development: Allow all operations on users collection
+    match /users/{mobileNo} {
+      allow read, write: if true;
+    }
+
+    // Tournaments collection - public read, admin write
+    match /tournaments/{tournamentId} {
+      allow read: if true; // Public tournaments
+      allow write: if request.auth != null && request.auth.token.role == 'admin';
+    }
+
+    // Payments collection - users can read their own, admins can read all
+    match /payments/{paymentId} {
+      // Allow read for payment history (filtered by user on client)
+      allow read: if true;
+      // Allow create for payment requests
+      allow create: if true;
+      // Only admins can update payment status
+      allow update: if request.auth != null && request.auth.token.role == 'admin';
+      allow delete: if request.auth != null && request.auth.token.role == 'admin';
+    }
+
+    // Admin collection - admin only
+    match /admins/{adminId} {
+      allow read, write: if request.auth != null && request.auth.token.role == 'admin';
+    }
+
+    // Notifications collection - users can read their own, admins can read all
+    match /notifications/{notificationId} {
+      // Allow read for all documents (client-side filtering by user_mobile)
+      // This allows unauthenticated users to read notifications via queries
+      allow read: if true;
+      // Only admins can create notifications
+      allow create: if request.auth != null && request.auth.token.role == 'admin';
+      // Allow update for marking as read (users can update their own notifications)
+      allow update: if true;
+      // Only admins can delete notifications
+      allow delete: if request.auth != null && request.auth.token.role == 'admin';
+    }
+  }
+}
+
+

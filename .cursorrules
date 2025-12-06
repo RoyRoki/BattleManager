@@ -1,0 +1,236 @@
+Project Overview
+
+Description: BattleManager is a mobile-first Progressive Web App (PWA) for managing Free Fire (FF) tournaments. It includes user enrollment via points, secure credential sharing, real-time chat, manual payments, and admin controls.
+Key Principles:
+Mobile-first design: Prioritize responsive layouts, touch-friendly interactions.
+Security-first: Always validate inputs, use Firebase rules, encrypt sensitive data.
+Immersive UX: Incorporate gaming themes (dark mode, neon accents), animations (Framer Motion), and sounds (Howler.js).
+Real-time: Leverage Firebase for live updates (e.g., tournament status, chat).
+
+
+Tech Stack & Dependencies
+
+Frontend: React 18+ with Hooks and Context API. Use TypeScript for all new code.
+Styling: Tailwind CSS. Extend with custom theme for battle royale aesthetics (black/orange/yellow-orange; Orbitron for headings, Roboto for body).
+State Management: React Context + react-firebase-hooks for real-time syncing. Avoid Redux unless scaling demands it.
+Animations & Audio: Framer Motion for transitions; Lottie for loaders; Howler.js for effects (e.g., gunshot on enroll).
+Backend/Database: Firebase Firestore (data), Realtime DB (chat), Auth (admins only). No custom backend servers.
+Integrations:
+OTP: Fast2SMS via Vercel serverless functions (do not hardcode API keys).
+Storage: Cloudinary for uploads (avatars, banners).
+Payments: Manual UPI QR generation (string builder); no auto-processing.
+
+Routing: React Router DOM with bottom navigation tabs.
+Deployment: Vercel. Ensure PWA manifest and service worker for APK generation via Capacitor.
+Dependencies: Install via npm i <pkg>. Key pkgs: firebase, react-router-dom, tailwindcss, framer-motion, howler, lottie-react, cloudinary-react, axios, zod (validation).
+Rule: When generating code, import only necessary modules. Use ES6+ syntax.
+
+Code Structure & Organization - Clean Architecture
+
+Folder Structure (Feature-Based Clean Architecture):
+src/
+├── features/              # Feature modules (organized by domain)
+│   ├── auth/             # Authentication feature
+│   │   ├── domain/       # Business logic layer
+│   │   │   ├── entities/        # Domain entities (User.ts)
+│   │   │   ├── usecases/        # Business use cases
+│   │   │   │   ├── SendOTPUseCase.ts
+│   │   │   │   ├── VerifyOTPUseCase.ts
+│   │   │   │   ├── CheckUserExistsUseCase.ts
+│   │   │   │   └── CreateUserUseCase.ts
+│   │   │   └── repositories/    # Repository interfaces
+│   │   │       └── IAuthRepository.ts
+│   │   ├── data/         # Data layer
+│   │   │   ├── datasources/     # Data sources (API, Firestore, etc.)
+│   │   │   │   ├── OTPDataSource.ts
+│   │   │   │   └── UserDataSource.ts
+│   │   │   └── repositories/    # Repository implementations
+│   │   │       └── AuthRepository.ts
+│   │   └── presentation/ # Presentation layer
+│   │       ├── viewmodels/      # ViewModels (custom hooks)
+│   │       │   └── useLoginViewModel.ts
+│   │       └── views/           # UI components/pages
+│   │           └── login-page.tsx
+│   ├── tournament/       # Tournament feature
+│   │   ├── domain/
+│   │   │   ├── entities/
+│   │   │   │   └── Tournament.ts
+│   │   │   ├── usecases/
+│   │   │   │   ├── EnrollTournamentUseCase.ts
+│   │   │   │   ├── GetTournamentsUseCase.ts
+│   │   │   │   └── GetTournamentDetailsUseCase.ts
+│   │   │   └── repositories/
+│   │   │       └── ITournamentRepository.ts
+│   │   ├── data/
+│   │   │   ├── datasources/
+│   │   │   │   └── TournamentDataSource.ts
+│   │   │   └── repositories/
+│   │   │       └── TournamentRepository.ts
+│   │   └── presentation/
+│   │       ├── viewmodels/
+│   │       │   └── useTournamentViewModel.ts
+│   │       └── views/
+│   │           ├── tournament-list.tsx
+│   │           └── tournament-detail.tsx
+│   ├── payment/          # Payment feature
+│   ├── chat/             # Chat feature
+│   └── admin/            # Admin feature
+├── shared/               # Shared code across features
+│   ├── components/       # Reusable UI components (cross-feature)
+│   │   ├── ui/           # Base UI components
+│   │   │   ├── Button.tsx
+│   │   │   ├── Input.tsx
+│   │   │   ├── Card.tsx
+│   │   │   ├── Modal.tsx
+│   │   │   └── LoadingSpinner.tsx
+│   │   ├── layout/       # Layout components
+│   │   │   ├── BottomNav.tsx
+│   │   │   ├── ErrorBoundary.tsx
+│   │   │   └── PageContainer.tsx
+│   │   └── feedback/     # Feedback components
+│   │       └── Toast.tsx
+│   ├── hooks/            # Shared custom hooks
+│   │   ├── useFirestoreTransaction.ts
+│   │   └── useDebounce.ts
+│   ├── utils/            # Utility functions
+│   │   ├── validations.ts
+│   │   ├── encryptCredentials.ts
+│   │   └── constants.ts
+│   ├── services/         # External services (Firebase, Cloudinary, etc.)
+│   │   ├── firebase/
+│   │   │   ├── firebaseService.ts
+│   │   │   └── firestoreService.ts
+│   │   ├── cloudinary/
+│   │   │   └── cloudinaryService.ts
+│   │   └── upi/
+│   │       └── upiService.ts
+│   └── types/            # Shared TypeScript types
+│       └── common.ts
+├── core/                 # Core application setup
+│   ├── contexts/         # Global contexts (Auth, Theme, etc.)
+│   ├── routing/          # Routing configuration
+│   ├── config/           # App configuration
+│   └── App.tsx           # Root component
+└── api/                  # Vercel serverless functions
+    ├── send-otp.ts
+    └── verify-otp.ts
+
+File Naming:
+- Components: PascalCase (e.g., TournamentCard.tsx, Button.tsx)
+- Hooks: camelCase with 'use' prefix (e.g., useLoginViewModel.ts)
+- Utilities: camelCase (e.g., validations.ts, constants.ts)
+- Types/Interfaces: PascalCase (e.g., User.ts, ITournamentRepository.ts)
+- Use Cases: PascalCase with 'UseCase' suffix (e.g., SendOTPUseCase.ts)
+- Data Sources: PascalCase with 'DataSource' suffix (e.g., OTPDataSource.ts)
+
+Component Rules:
+- Functional components only (no classes).
+- Always use TypeScript: Define props with interfaces (e.g., interface Props { ... }).
+- Memoize reusable components with React.memo for performance.
+- Extract reusable UI components to shared/components/ui/.
+- Component composition: Build complex components from smaller reusable ones.
+- Error boundaries for async operations.
+- Accessibility: Add ARIA labels, semantic HTML, keyboard navigation.
+- Props interface naming: `{FeatureName}Props` (e.g., ButtonProps, TournamentCardProps).
+
+Pages & Routing:
+Bottom nav: Home (/), Money (/money), Chat (/chat), Support (/support), Profile (/profile).
+Admin routes: Prefix with /admin (e.g., /admin/tournaments). Guard with AdminAuth component.
+Use useParams, useNavigate for dynamic routes.
+Keep routing logic in core/routing/ and route components in features/*/presentation/views/.
+
+
+Coding Conventions
+
+Language: TypeScript. Enforce strict mode. Use ESLint + Prettier.
+Naming:
+Variables/Functions: camelCase (e.g., fetchUserPoints).
+Constants: UPPER_SNAKE_CASE (e.g., MIN_WITHDRAW = 100).
+Components: PascalCase (e.g., EnrollButton).
+
+Formatting:
+Indent: 2 spaces.
+Quotes: Single quotes for JS, double for JSX.
+Semicolons: Always.
+Max line length: 100 chars.
+
+Comments: JSDoc for functions/hooks. Inline for complex logic.
+Error Handling: Use try-catch for async. Toast notifications (e.g., react-hot-toast) for user feedback. Log errors to console/Firebase.
+Performance: Lazy-load routes (React.lazy). Use useMemo/useCallback in lists. Paginate Firestore queries.
+
+Firebase Usage
+
+Auth:
+Users: Custom OTP flow (mobile as UID). No Firebase Auth for users.
+Admins: Firebase email/password + custom claims ({ role: 'admin' }).
+
+Firestore:
+Collections: Strictly follow schema (users by mobile_no, tournaments auto-ID).
+Queries: Use where, orderBy, limit. Add indexes for composites (e.g., status + reveal_time).
+Transactions: For points deductions/enrollments (e.g., runTransaction).
+Rules: Enforce in code gen: Users read own data/public tournaments; admins full access.
+
+Realtime DB: For global_chat (push messages with timestamps).
+Cloud Functions: Vercel for OTP/Fast2SMS. Firebase for timed reveals (e.g., decrypt on timer).
+Hooks: Always use react-firebase-hooks (e.g., useCollection, useDocument).
+Rule: Never expose raw Firebase config in client code. Use env vars.
+
+Security & Validation
+
+Inputs: Validate with Zod schemas (e.g., z.number().min(10) for entry_amount).
+Sensitive Data:
+Credentials: Encrypt with CryptoJS; store in Firestore; decrypt via timed Cloud Function.
+API Keys: Env vars only (Vercel dashboard).
+
+Payments: Generate UPI strings client-side; require proof upload (Cloudinary). Admin approves manually.
+Rate Limiting: 3 OTP attempts; Firebase rules for writes.
+Bypass Prevention: Check enrolled_tournaments array before credential access.
+Rule: Audit generated code for SQLi/XSS (though Firestore mitigates). Sanitize uploads.
+
+UI/UX & Theming
+
+Tailwind Config: Extend with gaming palette:
+theme: {
+  extend: {
+    colors: { primary: '#00FF41', accent: '#FF0040', bg: '#0A0A0A' },
+    fontFamily: { heading: ['Orbitron'], body: ['Roboto'] }
+  }
+}
+Animations: Framer Motion for fades/slides (e.g., motion.div with variants). Lottie for spinners.
+Audio: Global Howler manager (e.g., play('enroll-gunshot') on actions).
+Responsiveness: Mobile-first; use Tailwind breakpoints (sm:, md:).
+PWA: Ensure manifest.json, service worker for offline (caching routes/assets).
+Rule: Add loading states (skeletons) and error fallbacks to all async components.
+
+Testing & Deployment
+
+Testing: Jest for units; Cypress for E2E. Cover auth flows, transactions.
+Deployment: Vercel CI/CD on push. Firebase deploy for rules/functions.
+Env Vars: Prefix REACT_APP_ for client; VERCEL_ for serverless.
+Rule: Generate tests alongside code. Optimize for Vercel free tier (e.g., <1MB docs).
+
+AI Generation Guidelines
+
+Prompt Alignment: Generate code that matches user requests but adheres to these rules. If unclear, ask for clarification.
+Modularity: Break large features into small, testable components following clean architecture.
+Clean Architecture Principles:
+- Domain layer: Pure business logic, no framework dependencies
+- Data layer: Implements domain interfaces, handles external APIs/databases
+- Presentation layer: UI components and view models (React hooks)
+- Dependency rule: Outer layers depend on inner layers, never reverse
+- Use dependency injection for repositories via props/context
+Completeness: Include imports, exports, and hooks. Use placeholders for env vars.
+Reusable Components:
+- Create base UI components in shared/components/ui/ (Button, Input, Card, Modal, etc.)
+- Build feature-specific components using base components
+- Extract common patterns into reusable components
+- Use composition over inheritance
+- Component props should be explicit interfaces
+Examples:
+For use case: export class SendOTPUseCase { constructor(private repo: IAuthRepository) {} }
+For view model: export const useLoginViewModel = () => { ... }
+For reusable component: export const Button: React.FC<ButtonProps> = ({ variant, ...props }) => { ... }
+For validation: const schema = z.object({ entryAmount: z.number().min(10) });
+
+Edge Cases: Always handle (e.g., insufficient points → error toast).
+Iteration: Suggest refactors if code drifts from clean architecture or component reusability.

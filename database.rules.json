@@ -1,0 +1,36 @@
+{
+  "rules": {
+    "global_chat": {
+      ".read": true,
+      ".write": true
+    },
+    "support_chats": {
+      ".read": true,
+      ".write": true,
+      "$userMobile": {
+        ".read": true,
+        ".write": true,
+        "messages": {
+          ".read": true,
+          ".write": true,
+          "$messageId": {
+            ".read": true,
+            ".write": true
+          }
+        }
+      }
+    },
+    "otps": {
+      ".read": false,
+      ".write": false,
+      "$mobileNumber": {
+        ".read": false,
+        ".write": false
+      }
+    },
+    ".read": false,
+    ".write": false
+  }
+}
+
+
