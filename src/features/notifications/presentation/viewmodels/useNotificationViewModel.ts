@@ -71,7 +71,7 @@ export const useNotificationViewModel = (
         const data = doc.data();
         return {
           id: doc.id,
-          user_mobile: data.user_mobile,
+          user_email: data.user_email || data.user_mobile || '',
           type: data.type,
           title: data.title,
           message: data.message,

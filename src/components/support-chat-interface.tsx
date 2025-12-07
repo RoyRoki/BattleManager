@@ -225,7 +225,7 @@ export const SupportChatInterface: React.FC<SupportChatInterfaceProps> = ({
 
                 {/* Messages in Group */}
                 {group.messages.map((msg) => {
-                  const isMsgFromAdmin = msg.is_admin;
+                  const isMsgFromAdmin = Boolean(msg.is_admin);
                   
                   // Determine if message is from current user
                   // For regular users: admin messages are never "own messages"

@@ -98,7 +98,7 @@ export const AdminNotifications: React.FC = () => {
       });
 
       // Credit points to user
-      await addPoints(payment.user_mobile, payment.amount);
+      await addPoints(payment.user_email, payment.amount);
 
       toast.success('Payment approved and points credited!');
     } catch (error) {
@@ -243,7 +243,7 @@ export const AdminNotifications: React.FC = () => {
                             {payment.amount} points
                           </p>
                           <p className="text-sm text-gray-400">
-                            User: {payment.user_name || 'Unknown'} ({payment.user_mobile})
+                            User: {payment.user_name || 'Unknown'} ({payment.user_email})
                           </p>
                           <p className="text-xs text-gray-500">
                             {payment.created_at.toLocaleString()}
@@ -310,7 +310,7 @@ export const AdminNotifications: React.FC = () => {
                             {payment.amount} points
                           </p>
                           <p className="text-sm text-gray-400">
-                            User: {payment.user_name || 'Unknown'} ({payment.user_mobile})
+                            User: {payment.user_name || 'Unknown'} ({payment.user_email})
                           </p>
                           {payment.commission_amount && (
                             <div className="mt-2 space-y-1">
@@ -383,11 +383,11 @@ export const AdminNotifications: React.FC = () => {
                   <div className="space-y-2">
                     {supportChats.map((chat, index) => (
                       <motion.div
-                        key={chat.user_mobile}
+                        key={chat.user_email}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.05 }}
-                        onClick={() => setSelectedChatUser(chat.user_mobile)}
+                        onClick={() => setSelectedChatUser(chat.user_email)}
                         className="bg-bg-secondary border border-gray-800 rounded-lg p-4 cursor-pointer hover:border-primary transition-all group"
                       >
                         <div className="flex items-center gap-4">
@@ -407,7 +407,7 @@ export const AdminNotifications: React.FC = () => {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1">
                               <h3 className="text-white font-heading group-hover:text-primary transition truncate">
-                                {chat.user_name || chat.user_mobile}
+                                {chat.user_name || chat.user_email}
                               </h3>
                               {chat.last_message_time && (
                                 <span className="text-xs text-gray-500 flex items-center gap-1 flex-shrink-0 ml-2">
@@ -420,7 +420,7 @@ export const AdminNotifications: React.FC = () => {
                               {chat.last_message || 'No messages'}
                             </p>
                             <p className="text-xs text-gray-600 mt-1">
-                              {chat.user_mobile}
+                              {chat.user_email}
                             </p>
                           </div>
 

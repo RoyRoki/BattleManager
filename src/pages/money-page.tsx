@@ -72,8 +72,8 @@ export const MoneyPage: React.FC = () => {
 
     // Track if user left the page (indicating UPI app opened)
     let userLeftPage = false;
-    let blurTimeout: NodeJS.Timeout;
-    let failureTimeout: NodeJS.Timeout;
+    let blurTimeout: ReturnType<typeof setTimeout>;
+    let failureTimeout: ReturnType<typeof setTimeout>;
 
     const handleBlur = () => {
       userLeftPage = true;

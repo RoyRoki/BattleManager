@@ -167,8 +167,8 @@ export const useRealtimeChat = () => {
 
     try {
       await push(messagesRef, {
-        user_mobile: user.mobile_no,
-        user_name: user.name || user.mobile_no,
+        user_mobile: user.email,
+        user_name: user.name || user.email,
         message: message.trim(),
         timestamp: serverTimestamp(),
         is_admin: false,
