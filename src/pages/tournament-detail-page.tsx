@@ -11,14 +11,22 @@ import { useAuth } from '../contexts/AuthContext';
 import { HiArrowLeft, HiFire, HiClipboardCopy, HiLockClosed, HiLockOpen, HiEye, HiEyeOff } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 
-// Compute effective status based on reveal_time
+// Compute effective status based on reveal_time and start_time
 const getEffectiveStatus = (tournament: Tournament): TournamentStatus => {
   if (tournament.status === 'completed' || tournament.status === 'cancelled') {
     return tournament.status;
   }
-  if (tournament.status === 'upcoming' && tournament.reveal_time) {
+  // If status is already live, return live
+  if (tournament.status === 'live') {
+    return 'live';
+  }
+  // If status is upcoming, check if reveal_time or start_time has passed
+  if (tournament.status === 'upcoming') {
     const now = new Date();
-    if (now >= new Date(tournament.reveal_time)) {
+    if (tournament.reveal_time && now >= new Date(tournament.reveal_time)) {
+      return 'live';
+    }
+    if (tournament.start_time && now >= new Date(tournament.start_time)) {
       return 'live';
     }
   }
@@ -81,11 +89,14 @@ export const TournamentDetailPage: React.FC = () => {
 
   const effectiveStatus = getEffectiveStatus(tournament);
 
+  // User can view credentials if:
+  // 1. User is enrolled AND
+  // 2. Tournament is live (effectiveStatus === 'live') OR reveal_time has passed
   const canViewCredentials =
     user &&
     user.enrolled_tournaments.includes(tournament.id) &&
-    tournament.reveal_time &&
-    new Date() >= tournament.reveal_time;
+    (effectiveStatus === 'live' || 
+     (tournament.reveal_time && new Date() >= tournament.reveal_time));
 
   // Decrypt credentials if user can view them
   let ffId = null;
@@ -212,10 +223,12 @@ export const TournamentDetailPage: React.FC = () => {
             </div>
           )}
 
-          {/* Kill Leaderboard for completed tournaments */}
-          {effectiveStatus === 'completed' && tournament.player_kills && Object.keys(tournament.player_kills).length > 0 && (
+          {/* Kill Leaderboard for live and completed tournaments */}
+          {(effectiveStatus === 'live' || effectiveStatus === 'completed') && 
+           tournament.player_kills && 
+           Object.keys(tournament.player_kills).length > 0 && (
             <div className="px-4 pb-4">
-              <KillLeaderboard tournament={tournament} currentUserEmail={user?.email} />
+              <KillLeaderboard tournament={tournament} currentUserEmail={user?.email} isLive={effectiveStatus === 'live'} />
             </div>
           )}
 
@@ -302,7 +315,7 @@ export const TournamentDetailPage: React.FC = () => {
                 </div>
               </div>
             </div>
-          ) : tournament.reveal_time && new Date() < tournament.reveal_time ? (
+          ) : tournament.reveal_time && new Date() < tournament.reveal_time && effectiveStatus !== 'live' ? (
             <div className="px-4 pb-4">
               <div className="bg-bg-tertiary border border-gray-700 rounded-lg p-4 mb-6">
                 <div className="flex items-center gap-2">
@@ -311,6 +324,15 @@ export const TournamentDetailPage: React.FC = () => {
                     Credentials will be revealed on:{' '}
                     <span className="text-primary">{new Date(tournament.reveal_time).toLocaleString()}</span>
                   </p>
+                </div>
+              </div>
+            </div>
+          ) : effectiveStatus === 'live' && user && user.enrolled_tournaments.includes(tournament.id) && !ffId && !ffPassword ? (
+            <div className="px-4 pb-4">
+              <div className="bg-bg-tertiary border border-gray-700 rounded-lg p-4 mb-6">
+                <div className="flex items-center gap-2">
+                  <HiLockClosed className="w-5 h-5 text-gray-500" />
+                  <p className="text-sm text-gray-400">Credentials are not available yet</p>
                 </div>
               </div>
             </div>
@@ -335,9 +357,10 @@ export const TournamentDetailPage: React.FC = () => {
 interface KillLeaderboardProps {
   tournament: Tournament;
   currentUserEmail?: string;
+  isLive?: boolean;
 }
 
-const KillLeaderboard: React.FC<KillLeaderboardProps> = ({ tournament, currentUserEmail }) => {
+const KillLeaderboard: React.FC<KillLeaderboardProps> = ({ tournament, currentUserEmail, isLive = false }) => {
   const [usersSnapshot] = useCollection(collection(firestore, 'users'));
 
   const leaderboard = useMemo(() => {
@@ -380,7 +403,12 @@ const KillLeaderboard: React.FC<KillLeaderboardProps> = ({ tournament, currentUs
     >
       <h3 className="text-lg font-heading text-orange-400 mb-4 flex items-center gap-2">
         <HiFire className="w-5 h-5" />
-        Kill Leaderboard
+        {isLive ? 'Live Kill Leaderboard' : 'Kill Leaderboard'}
+        {isLive && (
+          <span className="ml-2 text-xs bg-green-900 text-green-300 px-2 py-1 rounded animate-pulse">
+            LIVE
+          </span>
+        )}
       </h3>
       <div className="space-y-2">
         {leaderboard.map((player, index) => {
@@ -423,8 +451,12 @@ const KillLeaderboard: React.FC<KillLeaderboardProps> = ({ tournament, currentUs
 
               {/* Winning Points */}
               <div className="text-right flex-shrink-0">
-                <p className="text-lg font-heading text-green-400">{player.winningPoints} pts</p>
-                <p className="text-xs text-gray-500">{player.kills} kills</p>
+                {!isLive && (
+                  <p className="text-lg font-heading text-green-400">{player.winningPoints} pts</p>
+                )}
+                <p className={`text-xs ${isLive ? 'text-orange-400 font-heading text-base' : 'text-gray-500'}`}>
+                  {player.kills} {player.kills === 1 ? 'kill' : 'kills'}
+                </p>
               </div>
             </motion.div>
           );

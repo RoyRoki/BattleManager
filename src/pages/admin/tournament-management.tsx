@@ -173,6 +173,8 @@ export const TournamentManagement: React.FC = () => {
 
   const handleEdit = (tournament: Tournament) => {
     setEditingTournament(tournament);
+    // Scroll to top when editing
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     
     // Decrypt credentials if they exist
     let ffId = '';
@@ -194,11 +196,20 @@ export const TournamentManagement: React.FC = () => {
       }
     }
     
+    // Format date for datetime-local input (needs local time, not UTC)
+    const startDate = new Date(tournament.start_time);
+    const year = startDate.getFullYear();
+    const month = String(startDate.getMonth() + 1).padStart(2, '0');
+    const day = String(startDate.getDate()).padStart(2, '0');
+    const hours = String(startDate.getHours()).padStart(2, '0');
+    const minutes = String(startDate.getMinutes()).padStart(2, '0');
+    const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+
     setFormData({
       name: tournament.name,
       entry_amount: tournament.entry_amount.toString(),
       max_players: tournament.max_players.toString(),
-      start_time: new Date(tournament.start_time).toISOString().slice(0, 16),
+      start_time: formattedDateTime,
       per_kill_point: tournament.per_kill_point?.toString() || '',
       ff_id: ffId,
       ff_password: ffPassword,
@@ -835,7 +846,9 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       })
       .map((doc) => {
         const data = doc.data();
-        const userEmail = data.email || doc.id; // Use email or fallback to doc.id
+        // Use doc.id as primary source since user documents are keyed by normalized email
+        // This ensures consistency with addPoints which uses normalized email
+        const userEmail = doc.id.toLowerCase().trim();
         const existingKills = tournament.player_kills?.[userEmail]?.kills || 0;
         const pointsCredited = tournament.player_kills?.[userEmail]?.points_credited || 0;
         const customCredit = customCredits[userEmail] || tournament.payment_info?.custom_credits?.[userEmail] || 0;
@@ -906,7 +919,10 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
     }
 
     const user = enrolledUsers.find((u) => u.email === email);
-    if (!user) return;
+    if (!user) {
+      toast.error('User not found');
+      return;
+    }
 
     // Check if payment has been made
     if (tournament.payment_info?.paid_at) {
@@ -918,10 +934,14 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
     setPaying(true);
 
     try {
+      // Normalize email to match how users are stored in Firestore
+      const normalizedEmail = email.toLowerCase().trim();
+      
       // Credit points immediately
-      const success = await addPoints(email, amount);
+      const success = await addPoints(normalizedEmail, amount);
       if (!success) {
-        toast.error('Failed to credit points');
+        toast.error(`Failed to credit points to ${user.name}. User may not exist in database.`);
+        console.error(`Failed to credit custom points to ${user.name} (${normalizedEmail})`);
         return;
       }
 
@@ -950,19 +970,25 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       });
 
       // Create payment record for tournament winning
-      await addDoc(collection(firestore, 'payments'), {
-        user_email: email,
-        user_name: user.name || 'Unknown',
-        amount: amount,
-        type: 'tournament_winning',
-        status: 'approved',
-        tournament_id: tournament.id,
-        tournament_name: tournament.name,
-        approved_by: adminEmail,
-        approved_at: new Date(),
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
+      try {
+        await addDoc(collection(firestore, 'payments'), {
+          user_email: email,
+          user_name: user.name || 'Unknown',
+          amount: amount,
+          type: 'tournament_winning',
+          status: 'approved',
+          tournament_id: tournament.id,
+          tournament_name: tournament.name,
+          approved_by: adminEmail,
+          approved_at: new Date(),
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      } catch (paymentError) {
+        console.error('Error creating payment record:', paymentError);
+        // Don't fail the whole operation if payment record creation fails
+        toast.error('Points credited but failed to create payment record');
+      }
 
       toast.success(`Credited ${amount} custom points to ${user.name}`);
       setCustomCreditAmount('');
@@ -972,9 +998,9 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       setTimeout(() => {
         window.location.reload();
       }, 1000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error crediting custom points:', error);
-      toast.error('Failed to credit custom points');
+      toast.error(`Failed to credit custom points: ${error.message || 'Unknown error'}`);
     } finally {
       setPaying(false);
     }
@@ -1000,13 +1026,26 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       enrolledUsers.forEach((user) => {
         const kills = killCounts[user.email] ?? user.existingKills;
         const existingData = tournament.player_kills?.[user.email];
-        playerKills[user.email] = {
+        
+        // Build PlayerKill object, only including optional fields if they exist
+        const playerKill: PlayerKill = {
           kills,
           updated_at: new Date(),
-          // Preserve existing payment info
-          points_credited: existingData?.points_credited,
-          credited_at: existingData?.credited_at,
         };
+        
+        // Only include points_credited if it exists and is not undefined
+        if (existingData?.points_credited !== undefined) {
+          playerKill.points_credited = existingData.points_credited;
+        }
+        
+        // Only include credited_at if it exists and is not undefined
+        if (existingData?.credited_at !== undefined) {
+          playerKill.credited_at = existingData.credited_at instanceof Date
+            ? existingData.credited_at
+            : (existingData.credited_at as any)?.toDate?.() || new Date(existingData.credited_at);
+        }
+        
+        playerKills[user.email] = playerKill;
       });
 
       await updateDoc(doc(firestore, 'tournaments', tournament.id), {
@@ -1042,18 +1081,30 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
 
   const confirmPayIndividual = async (email: string) => {
     const user = enrolledUsers.find((u) => u.email === email);
-    if (!user) return;
+    if (!user) {
+      toast.error('User not found');
+      return;
+    }
 
     const kills = killCounts[email] ?? user.existingKills;
     const pointsToCredit = calculatePoints(kills, email);
 
+    if (pointsToCredit <= 0) {
+      toast.error('No points to credit');
+      return;
+    }
+
     setShowCreditConfirmModal(null);
     setPaying(true);
     try {
+      // Normalize email to match how users are stored in Firestore
+      const normalizedEmail = email.toLowerCase().trim();
+      
       // Credit points
-      const success = await addPoints(email, pointsToCredit);
+      const success = await addPoints(normalizedEmail, pointsToCredit);
       if (!success) {
-        toast.error('Failed to credit points');
+        toast.error(`Failed to credit points to ${user.name}. User may not exist in database.`);
+        console.error(`Failed to credit points to ${user.name} (${normalizedEmail})`);
         return;
       }
 
@@ -1075,19 +1126,25 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       });
 
       // Create payment record for tournament winning
-      await addDoc(collection(firestore, 'payments'), {
-        user_email: email,
-        user_name: user.name || 'Unknown',
-        amount: pointsToCredit,
-        type: 'tournament_winning',
-        status: 'approved',
-        tournament_id: tournament.id,
-        tournament_name: tournament.name,
-        approved_by: adminEmail,
-        approved_at: new Date(),
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
+      try {
+        await addDoc(collection(firestore, 'payments'), {
+          user_email: email,
+          user_name: user.name || 'Unknown',
+          amount: pointsToCredit,
+          type: 'tournament_winning',
+          status: 'approved',
+          tournament_id: tournament.id,
+          tournament_name: tournament.name,
+          approved_by: adminEmail,
+          approved_at: new Date(),
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      } catch (paymentError) {
+        console.error('Error creating payment record:', paymentError);
+        // Don't fail the whole operation if payment record creation fails
+        toast.error('Points credited but failed to create payment record');
+      }
 
       toast.success(`Credited ${pointsToCredit} points to ${user.name}`);
       
@@ -1095,9 +1152,9 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       setTimeout(() => {
         window.location.reload();
       }, 1000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error crediting points:', error);
-      toast.error('Failed to credit points');
+      toast.error(`Failed to credit points: ${error.message || 'Unknown error'}`);
     } finally {
       setPaying(false);
     }
@@ -1115,77 +1172,139 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       let totalPaid = 0;
       const updatedKills: Record<string, PlayerKill> = {};
       const customCreditsToSave: Record<string, number> = {};
+      const failedUsers: Array<{ name: string; email: string; error: string }> = [];
 
       for (const user of enrolledUsers) {
         const kills = killCounts[user.email] ?? user.existingKills;
         const pointsToCredit = calculatePoints(kills, user.email);
 
         if (pointsToCredit > 0) {
-          // Credit points
-          const success = await addPoints(user.email, pointsToCredit);
-          if (success) {
-            totalPaid += pointsToCredit;
-            updatedKills[user.email] = {
-              kills,
-              updated_at: new Date(),
-              points_credited: pointsToCredit,
-              credited_at: new Date(),
-            };
+          try {
+            // Credit points - normalize email to match how users are stored
+            const normalizedEmail = user.email.toLowerCase().trim();
+            const success = await addPoints(normalizedEmail, pointsToCredit);
+            
+            if (success) {
+              totalPaid += pointsToCredit;
+              updatedKills[user.email] = {
+                kills,
+                updated_at: new Date(),
+                points_credited: pointsToCredit,
+                credited_at: new Date(),
+              };
+            } else {
+              // Transaction failed - user might not exist or other error
+              failedUsers.push({
+                name: user.name,
+                email: user.email,
+                error: 'Failed to credit points (user may not exist in database)',
+              });
+            }
+          } catch (error: any) {
+            // Catch any errors from addPoints
+            console.error(`Error crediting points to ${user.email}:`, error);
+            failedUsers.push({
+              name: user.name,
+              email: user.email,
+              error: error.message || 'Unknown error',
+            });
           }
 
-          // Save custom credits if any
-          const custom = customCredits[user.email];
-          if (custom) {
-            customCreditsToSave[user.email] = custom;
+          // Save custom credits if any (only if user was successfully credited)
+          if (updatedKills[user.email]) {
+            const custom = customCredits[user.email];
+            if (custom) {
+              customCreditsToSave[user.email] = custom;
+            }
           }
         }
       }
 
       // Update tournament with payment info
-      await updateDoc(doc(firestore, 'tournaments', tournament.id), {
-        player_kills: {
-          ...tournament.player_kills,
-          ...updatedKills,
-        },
-        payment_info: {
-          points_per_kill: pointsPerKill,
-          total_paid: totalPaid,
-          paid_at: new Date(),
-          paid_by: adminEmail,
-          custom_credits: Object.keys(customCreditsToSave).length > 0 ? customCreditsToSave : undefined,
-        },
-        updated_at: new Date(),
-      });
+      const paymentInfo: any = {
+        points_per_kill: pointsPerKill,
+        total_paid: totalPaid,
+        paid_at: new Date(),
+        paid_by: adminEmail,
+      };
+      
+      // Only include custom_credits if there are any
+      if (Object.keys(customCreditsToSave).length > 0) {
+        paymentInfo.custom_credits = customCreditsToSave;
+      }
+      
+      // Only update tournament if at least some users were credited
+      if (Object.keys(updatedKills).length > 0) {
+        await updateDoc(doc(firestore, 'tournaments', tournament.id), {
+          player_kills: {
+            ...tournament.player_kills,
+            ...updatedKills,
+          },
+          payment_info: paymentInfo,
+          updated_at: new Date(),
+        });
 
-      // Create payment records for all tournament winnings
-      for (const user of enrolledUsers) {
-        const kills = killCounts[user.email] ?? user.existingKills;
-        const pointsToCredit = calculatePoints(kills, user.email);
-        
-        if (pointsToCredit > 0 && updatedKills[user.email]) {
-          await addDoc(collection(firestore, 'payments'), {
-            user_email: user.email,
-            user_name: user.name || 'Unknown',
-            amount: pointsToCredit,
-            type: 'tournament_winning',
-            status: 'approved',
-            tournament_id: tournament.id,
-            tournament_name: tournament.name,
-            approved_by: adminEmail,
-            approved_at: new Date(),
-            created_at: new Date(),
-            updated_at: new Date(),
-          });
+        // Create payment records for all successfully credited users
+        for (const user of enrolledUsers) {
+          const kills = killCounts[user.email] ?? user.existingKills;
+          const pointsToCredit = calculatePoints(kills, user.email);
+          
+          if (pointsToCredit > 0 && updatedKills[user.email]) {
+            try {
+              await addDoc(collection(firestore, 'payments'), {
+                user_email: user.email,
+                user_name: user.name || 'Unknown',
+                amount: pointsToCredit,
+                type: 'tournament_winning',
+                status: 'approved',
+                tournament_id: tournament.id,
+                tournament_name: tournament.name,
+                approved_by: adminEmail,
+                approved_at: new Date(),
+                created_at: new Date(),
+                updated_at: new Date(),
+              });
+            } catch (error) {
+              console.error(`Error creating payment record for ${user.email}:`, error);
+            }
+          }
         }
       }
 
-      toast.success(`Credited points to all players! Total: ${totalPaid} points`);
-      setHasChanges(false);
-      
-      // Refresh page after successful credit
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      // Show success/error messages
+      if (failedUsers.length === 0) {
+        toast.success(`Credited points to all players! Total: ${totalPaid} points`);
+        setHasChanges(false);
+        
+        // Refresh page after successful credit
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else if (Object.keys(updatedKills).length > 0) {
+        // Some succeeded, some failed
+        toast.success(
+          `Credited points to ${Object.keys(updatedKills).length} players (${totalPaid} points). ${failedUsers.length} failed.`,
+          { duration: 5000 }
+        );
+        console.error('Failed to credit points to:', failedUsers);
+        // Show detailed error for each failed user
+        failedUsers.forEach((failed) => {
+          toast.error(`${failed.name} (${failed.email}): ${failed.error}`, { duration: 4000 });
+        });
+        setHasChanges(false);
+        
+        // Refresh page after partial success
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        // All failed
+        toast.error(`Failed to credit points to all ${failedUsers.length} players`);
+        console.error('All users failed:', failedUsers);
+        failedUsers.forEach((failed) => {
+          toast.error(`${failed.name} (${failed.email}): ${failed.error}`, { duration: 4000 });
+        });
+      }
     } catch (error) {
       console.error('Error crediting points:', error);
       toast.error('Failed to credit points');
@@ -1363,7 +1482,7 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
                     }`}
                   >
                     <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                      {/* Left Section: Rank, Avatar, Info */}
+                      {/* Left Section: Rank, Info */}
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         {/* Rank Badge */}
                         <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-xs md:text-sm font-heading flex-shrink-0 ${
@@ -1374,19 +1493,6 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
                         }`}>
                           {index + 1}
                         </div>
-
-                        {/* Avatar */}
-                        {user.avatar_url ? (
-                          <img
-                            src={user.avatar_url}
-                            alt={user.name}
-                            className="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary flex items-center justify-center text-bg font-heading text-sm md:text-lg flex-shrink-0">
-                            {user.name.charAt(0).toUpperCase()}
-                          </div>
-                        )}
 
                         {/* User Info */}
                         <div className="flex-1 min-w-0">

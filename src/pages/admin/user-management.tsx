@@ -1,24 +1,59 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { useCollection } from 'react-firebase-hooks/firestore';
 import { collection } from 'firebase/firestore';
 import { firestore } from '../../services/firebaseService';
 import { User } from '../../types';
 import { motion } from 'framer-motion';
+import { HiSearch } from 'react-icons/hi';
 
 export const UserManagement: React.FC = () => {
   const [users, loading, error] = useCollection(
     collection(firestore, 'users')
   ) as unknown as [{ docs: any[] } | null, boolean, Error | undefined];
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Log errors for debugging
   if (error) {
     console.error('UserManagement: Firestore error:', error);
   }
 
+  // Filter users based on search query (name and FF ID)
+  const filteredUsers = useMemo(() => {
+    if (!users?.docs) return [];
+    
+    if (!searchQuery.trim()) {
+      return users.docs;
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    return users.docs.filter((doc: any) => {
+      const data = doc.data();
+      const name = (data.name || '').toLowerCase();
+      const ffId = (data.ff_id || '').toLowerCase();
+      const email = (data.email || '').toLowerCase();
+      
+      return name.includes(query) || ffId.includes(query) || email.includes(query);
+    });
+  }, [users, searchQuery]);
+
   return (
     <div className="min-h-screen bg-bg pb-20">
       <div className="container mx-auto px-4 py-6">
         <h1 className="text-3xl font-heading text-primary mb-6 text-glow">User Management</h1>
+
+        {/* Search Bar */}
+        <div className="mb-6">
+          <div className="relative">
+            <HiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search by name or FF ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-bg-secondary border border-gray-800 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-colors"
+            />
+          </div>
+        </div>
 
         {/* Error Message */}
         {error && (
@@ -37,7 +72,14 @@ export const UserManagement: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {users?.docs.map((doc: any) => {
+            {filteredUsers.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-400">
+                  {searchQuery.trim() ? 'No users found matching your search.' : 'No users found.'}
+                </p>
+              </div>
+            ) : (
+              filteredUsers.map((doc: any) => {
               const data = doc.data();
               const user = {
                 ...data,
@@ -64,6 +106,9 @@ export const UserManagement: React.FC = () => {
                         {user.name || 'No Name'}
                       </h3>
                       <p className="text-sm text-gray-400">Email: {user.email}</p>
+                      {(user as any).ff_id && (
+                        <p className="text-sm text-gray-400">FF ID: {(user as any).ff_id}</p>
+                      )}
                       <div className="flex gap-4 mt-2 text-sm">
                         <span className="text-gray-400">Points: {user.points}</span>
                         <span className="text-gray-400">
@@ -86,7 +131,8 @@ export const UserManagement: React.FC = () => {
                   </div>
                 </motion.div>
               );
-            })}
+              })
+            )}
           </div>
         )}
       </div>
