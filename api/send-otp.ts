@@ -487,8 +487,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Send OTP via BREVO Transactional Email API with fallback key support
     let emailData: any;
-    let emailResponse: Response;
-    let usedKeyIndex = 0;
+    let emailResponse: Response | null = null;
     
     // Function to try sending email with a specific key
     const trySendEmail = async (apiKey: string, keyName: string): Promise<{ response: Response; data: any }> => {
@@ -586,16 +585,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { key: process.env.BREVO_KEY, name: 'BREVO_KEY' },
         { key: process.env.BREVO_API_KEY, name: 'BREVO_API_KEY' },
         { key: process.env.VERCEL_BREVO_KEY_FALLBACK_3, name: 'VERCEL_BREVO_KEY_FALLBACK_3' },
-      ].filter(k => k.key && k.key.trim() !== '');
+      ].filter((k): k is { key: string; name: string } => !!k.key && k.key.trim() !== '');
 
       console.log(`send-otp: Attempting to send email with ${allKeys.length} available key(s)`);
+
+      if (allKeys.length === 0) {
+        throw new Error('No BREVO API keys available');
+      }
 
       let emailSent = false;
       let lastError: any = null;
 
       for (let i = 0; i < allKeys.length; i++) {
         const { key, name } = allKeys[i];
-        usedKeyIndex = i;
         
         try {
           console.log(`send-otp: Trying key ${i + 1}/${allKeys.length}: ${name}`);
@@ -626,7 +628,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      if (!emailSent) {
+      if (!emailSent || !emailResponse) {
         console.error('send-otp: All BREVO keys failed');
         throw lastError || new Error('All BREVO API keys failed');
       }
