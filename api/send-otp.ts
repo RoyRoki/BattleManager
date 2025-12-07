@@ -18,51 +18,145 @@ function ensureFirebaseInitialized(): { app: App; db: Database } {
     if (!serviceAccountStr) {
       const error = new Error('FIREBASE_ADMIN_SDK environment variable not set');
       console.error('send-otp: Firebase Admin initialization failed:', error.message);
+      console.error('send-otp: Environment variable check:', {
+        hasAdminSDK: !!process.env.FIREBASE_ADMIN_SDK,
+        adminSDKType: typeof process.env.FIREBASE_ADMIN_SDK,
+        adminSDKLength: process.env.FIREBASE_ADMIN_SDK?.length || 0,
+      });
       throw error;
     }
+    
+    console.log('send-otp: FIREBASE_ADMIN_SDK found:', {
+      type: typeof serviceAccountStr,
+      length: serviceAccountStr.length,
+      firstChars: serviceAccountStr.substring(0, 50) + '...',
+    });
 
     let serviceAccount: any;
     
-    try {
-      // Remove surrounding quotes if present
-      let processedStr = serviceAccountStr;
-      if ((processedStr.startsWith('"') && processedStr.endsWith('"')) ||
-          (processedStr.startsWith("'") && processedStr.endsWith("'"))) {
-        processedStr = processedStr.slice(1, -1);
-      }
-      
-      // Fix control characters that break JSON parsing
-      let fixedJson = '';
-      let i = 0;
-      while (i < processedStr.length) {
-        if (processedStr[i] === '\\' && i + 1 < processedStr.length) {
-          fixedJson += processedStr[i] + processedStr[i + 1];
-          i += 2;
-        } else if (processedStr[i] === '\n' || processedStr[i] === '\r') {
-          if (processedStr[i] === '\r' && i + 1 < processedStr.length && processedStr[i + 1] === '\n') {
-            fixedJson += '\\n';
-            i += 2;
-          } else {
-            fixedJson += '\\n';
-            i += 1;
+    // Try multiple parsing strategies with detailed logging
+    let parseAttempt = 0;
+    const maxParseAttempts = 4;
+    let lastParseError: any = null;
+    
+    while (parseAttempt < maxParseAttempts && !serviceAccount) {
+      parseAttempt++;
+      try {
+        let processedStr = serviceAccountStr;
+        
+        console.log(`send-otp: JSON parse attempt ${parseAttempt}/${maxParseAttempts}`);
+        
+        // Strategy 1: Try parsing as-is (in case Vercel already parsed it as object)
+        if (parseAttempt === 1) {
+          if (typeof serviceAccountStr === 'object' && serviceAccountStr !== null) {
+            console.log('send-otp: FIREBASE_ADMIN_SDK is already an object, using directly');
+            serviceAccount = serviceAccountStr;
+            break;
           }
-        } else {
-          fixedJson += processedStr[i];
-          i += 1;
+          // Try parsing as-is string
+          try {
+            serviceAccount = JSON.parse(processedStr);
+            console.log('send-otp: Successfully parsed JSON as-is');
+            break;
+          } catch (e) {
+            console.log('send-otp: Parse as-is failed, trying next strategy');
+            lastParseError = e;
+          }
         }
+        
+        // Strategy 2: Remove surrounding quotes
+        if (parseAttempt === 2) {
+          if ((processedStr.startsWith('"') && processedStr.endsWith('"')) ||
+              (processedStr.startsWith("'") && processedStr.endsWith("'"))) {
+            processedStr = processedStr.slice(1, -1);
+            console.log('send-otp: Removed surrounding quotes');
+          }
+          try {
+            serviceAccount = JSON.parse(processedStr);
+            console.log('send-otp: Successfully parsed JSON after removing quotes');
+            break;
+          } catch (e) {
+            console.log('send-otp: Parse after removing quotes failed');
+            lastParseError = e;
+          }
+        }
+        
+        // Strategy 3: Handle escaped newlines and control characters
+        if (parseAttempt === 3) {
+          // Remove surrounding quotes if present
+          if ((processedStr.startsWith('"') && processedStr.endsWith('"')) ||
+              (processedStr.startsWith("'") && processedStr.endsWith("'"))) {
+            processedStr = processedStr.slice(1, -1);
+          }
+          
+          // Fix control characters that break JSON parsing
+          let fixedJson = '';
+          let i = 0;
+          while (i < processedStr.length) {
+            if (processedStr[i] === '\\' && i + 1 < processedStr.length) {
+              fixedJson += processedStr[i] + processedStr[i + 1];
+              i += 2;
+            } else if (processedStr[i] === '\n' || processedStr[i] === '\r') {
+              if (processedStr[i] === '\r' && i + 1 < processedStr.length && processedStr[i + 1] === '\n') {
+                fixedJson += '\\n';
+                i += 2;
+              } else {
+                fixedJson += '\\n';
+                i += 1;
+              }
+            } else {
+              fixedJson += processedStr[i];
+              i += 1;
+            }
+          }
+          processedStr = fixedJson;
+          
+          // Handle escaped sequences properly
+          processedStr = processedStr.replace(/\\\\n/g, '\x00NEWLINE\x00');
+          processedStr = processedStr.replace(/\\n/g, '\n');
+          processedStr = processedStr.replace(/\x00NEWLINE\x00/g, '\\n');
+          
+          try {
+            serviceAccount = JSON.parse(processedStr);
+            console.log('send-otp: Successfully parsed JSON after fixing control characters');
+            break;
+          } catch (e) {
+            console.log('send-otp: Parse after fixing control characters failed');
+            lastParseError = e;
+          }
+        }
+        
+        // Strategy 4: Simple trim and parse (last resort)
+        if (parseAttempt === 4) {
+          processedStr = serviceAccountStr.trim();
+          // Remove surrounding quotes
+          if ((processedStr.startsWith('"') && processedStr.endsWith('"')) ||
+              (processedStr.startsWith("'") && processedStr.endsWith("'"))) {
+            processedStr = processedStr.slice(1, -1).trim();
+          }
+          // Replace escaped newlines
+          processedStr = processedStr.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
+          try {
+            serviceAccount = JSON.parse(processedStr);
+            console.log('send-otp: Successfully parsed JSON with simple strategy');
+            break;
+          } catch (e) {
+            console.log('send-otp: All parse strategies failed');
+            lastParseError = e;
+          }
+        }
+      } catch (parseError: any) {
+        lastParseError = parseError;
+        console.error(`send-otp: Parse attempt ${parseAttempt} error:`, parseError.message);
       }
-      processedStr = fixedJson;
-      
-      // Handle escaped sequences properly
-      processedStr = processedStr.replace(/\\\\n/g, '\x00NEWLINE\x00');
-      processedStr = processedStr.replace(/\\n/g, '\n');
-      processedStr = processedStr.replace(/\x00NEWLINE\x00/g, '\\n');
-      
-      // Parse JSON
-      serviceAccount = JSON.parse(processedStr);
-    } catch (parseError: any) {
-      const error = new Error(`Failed to parse FIREBASE_ADMIN_SDK JSON: ${parseError.message}`);
-      console.error('send-otp: JSON parse error:', error.message);
+    }
+    
+    if (!serviceAccount) {
+      const error = new Error(`Failed to parse FIREBASE_ADMIN_SDK JSON after ${maxParseAttempts} attempts: ${lastParseError?.message || 'Unknown error'}`);
+      console.error('send-otp: All JSON parse attempts failed');
+      console.error('send-otp: Last parse error:', lastParseError);
+      console.error('send-otp: FIREBASE_ADMIN_SDK length:', serviceAccountStr.length);
+      console.error('send-otp: FIREBASE_ADMIN_SDK first 100 chars:', serviceAccountStr.substring(0, 100));
       throw error;
     }
 
@@ -72,14 +166,41 @@ function ensureFirebaseInitialized(): { app: App; db: Database } {
       throw error;
     }
 
-    const databaseURL = process.env.FIREBASE_DATABASE_URL;
+    // Trim and clean database URL (remove trailing newlines, whitespace, escaped newlines)
+    let databaseURL = process.env.FIREBASE_DATABASE_URL;
     if (!databaseURL) {
       const error = new Error('FIREBASE_DATABASE_URL environment variable not set');
       console.error('send-otp: Missing database URL:', error.message);
       throw error;
     }
+    
+    // Clean the database URL
+    databaseURL = databaseURL
+      .trim()
+      .replace(/\\n/g, '')
+      .replace(/\n/g, '')
+      .replace(/\\r/g, '')
+      .replace(/\r/g, '')
+      .replace(/[\r\n]+$/, '')
+      .trim();
+    
+    // Validate URL format
+    if (!databaseURL.match(/^https?:\/\/.+/)) {
+      const error = new Error(`Invalid FIREBASE_DATABASE_URL format: ${databaseURL.substring(0, 50)}...`);
+      console.error('send-otp: Invalid database URL format:', error.message);
+      throw error;
+    }
+    
+    console.log('send-otp: Database URL cleaned and validated:', databaseURL.substring(0, 60) + '...');
 
     try {
+      console.log('send-otp: Attempting Firebase Admin initialization with:', {
+        projectId: serviceAccount.project_id,
+        databaseURL: databaseURL.substring(0, 60) + '...',
+        hasPrivateKey: !!serviceAccount.private_key,
+        privateKeyLength: serviceAccount.private_key?.length || 0,
+      });
+      
       app = initializeApp({
         credential: cert(serviceAccount as any),
         databaseURL: databaseURL,
@@ -88,6 +209,12 @@ function ensureFirebaseInitialized(): { app: App; db: Database } {
     } catch (initError: any) {
       const error = new Error(`Firebase Admin initialization failed: ${initError.message}`);
       console.error('send-otp: Initialization error:', error.message);
+      console.error('send-otp: Initialization error details:', {
+        message: initError.message,
+        code: initError.code,
+        name: initError.name,
+        stack: initError.stack?.substring(0, 300),
+      });
       throw error;
     }
   }
@@ -95,13 +222,21 @@ function ensureFirebaseInitialized(): { app: App; db: Database } {
   // Get database instance
   let db: Database;
   try {
+    console.log('send-otp: Getting database instance...');
     db = getDatabase(app);
     if (!db) {
       throw new Error('Database instance is null');
     }
+    console.log('send-otp: Database instance obtained successfully');
   } catch (dbError: any) {
     const error = new Error(`Failed to get database instance: ${dbError.message}`);
     console.error('send-otp: Database error:', error.message);
+    console.error('send-otp: Database error details:', {
+      message: dbError.message,
+      code: dbError.code,
+      name: dbError.name,
+      stack: dbError.stack?.substring(0, 300),
+    });
     throw error;
   }
 
@@ -109,18 +244,20 @@ function ensureFirebaseInitialized(): { app: App; db: Database } {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // Wrap entire handler in try-catch for comprehensive error handling
+  try {
+    // Enable CORS
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
 
   const { email } = req.body;
 
@@ -458,14 +595,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
   } catch (error: any) {
-    console.error('send-otp: Unexpected error:', error);
-    console.error('send-otp: Error stack:', error.stack);
-    console.error('send-otp: Error name:', error.name);
+    // This catch block handles any errors not caught by inner try-catch blocks
+    console.error('send-otp: Unexpected top-level error:', error);
+    console.error('send-otp: Error details:', {
+      message: error.message,
+      code: error.code,
+      name: error.name,
+      stack: error.stack?.substring(0, 500),
+      type: error.constructor?.name || 'Unknown',
+    });
+    
+    // Log environment context for debugging
+    console.error('send-otp: Environment context:', {
+      hasAdminSDK: !!process.env.FIREBASE_ADMIN_SDK,
+      adminSDKLength: process.env.FIREBASE_ADMIN_SDK?.length || 0,
+      hasDatabaseURL: !!process.env.FIREBASE_DATABASE_URL,
+      databaseURLLength: process.env.FIREBASE_DATABASE_URL?.length || 0,
+      appsInitialized: getApps().length,
+      NODE_ENV: process.env.NODE_ENV,
+    });
+    
     return res.status(500).json({
       success: false,
       error: 'Internal server error',
       message: error.message || 'An unexpected error occurred',
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      errorCode: 'UNEXPECTED_ERROR',
+      details: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        stack: error.stack?.substring(0, 500),
+      } : undefined,
     });
   }
 }
