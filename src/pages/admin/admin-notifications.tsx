@@ -148,7 +148,7 @@ export const AdminNotifications: React.FC = () => {
 
     try {
       // Refund points back to user
-      await addPoints(payment.user_mobile, payment.amount);
+      await addPoints(payment.user_email, payment.amount);
 
       await updateDoc(doc(firestore, 'payments', payment.id), {
         status: 'rejected',
