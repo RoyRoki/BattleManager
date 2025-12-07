@@ -656,6 +656,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (emailData.messageId) {
         console.log('send-otp: BREVO Message ID:', emailData.messageId);
       }
+
+      // Verify BREVO response
+      // BREVO returns 201 status on success
+      if (emailResponse && (emailResponse.status === 201 || emailData?.messageId)) {
+        console.log('send-otp: OTP sent successfully via BREVO');
+        console.log('send-otp: OTP details:', {
+          email: normalizedEmail,
+          messageId: emailData?.messageId || 'N/A',
+          otpGenerated: '***', // Don't log actual OTP
+        });
+        
+        return res.status(200).json({
+          success: true,
+          message: 'OTP sent successfully',
+          messageId: emailData?.messageId, // Return message ID for tracking
+        });
+      } else {
+        // BREVO returned failure or unexpected response
+        console.error('send-otp: BREVO returned failure or unexpected response:', emailData);
+        
+        // Clean up Firebase entry if email failed
+        if (otpStored && otpRef) {
+          try {
+            await otpRef.remove();
+            console.log('send-otp: Cleaned up OTP from Firebase after email failure');
+          } catch (err) {
+            console.error('send-otp: Error cleaning up OTP:', err);
+          }
+        }
+
+        const errorMessage = emailData?.message || emailData?.error || 'Failed to send OTP via email. Please check your BREVO account and API key.';
+        
+        return res.status(400).json({
+          success: false,
+          error: errorMessage,
+          details: {
+            brevoResponse: emailData,
+            suggestion: 'Please check: 1) BREVO account is active, 2) Email address is valid, 3) API key is valid, 4) Sender email is verified',
+          },
+        });
+      }
     } catch (fetchError: any) {
       console.error('send-otp: BREVO API call failed:', fetchError);
       console.error('send-otp: Error details:', {
@@ -679,46 +720,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         error: `Failed to send OTP via email: ${fetchError.message}`,
       });
     }
-
-    // Verify BREVO response
-    // BREVO returns 201 status on success
-    if (emailResponse.status === 201 || emailData?.messageId) {
-      console.log('send-otp: OTP sent successfully via BREVO');
-      console.log('send-otp: OTP details:', {
-        email: normalizedEmail,
-        messageId: emailData?.messageId || 'N/A',
-        otpGenerated: '***', // Don't log actual OTP
-      });
-      
-      return res.status(200).json({
-        success: true,
-        message: 'OTP sent successfully',
-        messageId: emailData?.messageId, // Return message ID for tracking
-      });
-    } else {
-      // BREVO returned failure or unexpected response
-      console.error('send-otp: BREVO returned failure or unexpected response:', emailData);
-      
-      // Clean up Firebase entry if email failed
-      if (otpStored && otpRef) {
-        try {
-          await otpRef.remove();
-          console.log('send-otp: Cleaned up OTP from Firebase after email failure');
-        } catch (err) {
-          console.error('send-otp: Error cleaning up OTP:', err);
-        }
-      }
-
-      const errorMessage = emailData?.message || emailData?.error || 'Failed to send OTP via email. Please check your BREVO account and API key.';
-      
-      return res.status(400).json({
-        success: false,
-        error: errorMessage,
-        details: {
-          brevoResponse: emailData,
-          suggestion: 'Please check: 1) BREVO account is active, 2) Email address is valid, 3) API key is valid, 4) Sender email is verified',
-        },
-      });
+    } catch (innerError: any) {
+      // Catch any errors from the try block that starts at line 368
+      // This includes OTP generation, Firebase storage, and BREVO email sending
+      console.error('send-otp: Error in OTP generation/sending process:', innerError);
+      throw innerError; // Re-throw to be caught by top-level catch
     }
   } catch (error: any) {
     // This catch block handles any errors not caught by inner try-catch blocks
