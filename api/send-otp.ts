@@ -277,8 +277,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return map[char] || char;
   });
 
-  const BREVO_KEY = process.env.VERCEL_BREVO_KEY;
-  const BREVO_SMTP_KEY = process.env.VERCEL_BREVO_SMTP_KEY;
+  // Helper function to get BREVO API key with fallback support
+  const getBrevoKey = (): string | null => {
+    // Try keys in priority order
+    const keyCandidates = [
+      process.env.VERCEL_BREVO_KEY,
+      process.env.VERCEL_BREVO_KEY_FALLBACK_1,
+      process.env.VERCEL_BREVO_KEY_FALLBACK_2,
+      process.env.BREVO_KEY,
+      process.env.BREVO_API_KEY,
+      process.env.VERCEL_BREVO_KEY_FALLBACK_3,
+    ];
+
+    for (let i = 0; i < keyCandidates.length; i++) {
+      const key = keyCandidates[i];
+      if (key && key.trim() !== '') {
+        console.log(`send-otp: Using BREVO key from source ${i === 0 ? 'VERCEL_BREVO_KEY' : i === 1 ? 'VERCEL_BREVO_KEY_FALLBACK_1' : i === 2 ? 'VERCEL_BREVO_KEY_FALLBACK_2' : i === 3 ? 'BREVO_KEY' : i === 4 ? 'BREVO_API_KEY' : 'VERCEL_BREVO_KEY_FALLBACK_3'}`);
+        return key.trim();
+      }
+    }
+    return null;
+  };
+
+  // Helper function to get BREVO SMTP key with fallback support
+  const getBrevoSmtpKey = (): string | null => {
+    // Try keys in priority order
+    const keyCandidates = [
+      process.env.VERCEL_BREVO_SMTP_KEY,
+      process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_1,
+      process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_2,
+      process.env.BREVO_SMTP_KEY,
+      process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_3,
+    ];
+
+    for (let i = 0; i < keyCandidates.length; i++) {
+      const key = keyCandidates[i];
+      if (key && key.trim() !== '') {
+        console.log(`send-otp: Using BREVO SMTP key from source ${i === 0 ? 'VERCEL_BREVO_SMTP_KEY' : i === 1 ? 'VERCEL_BREVO_SMTP_KEY_FALLBACK_1' : i === 2 ? 'VERCEL_BREVO_SMTP_KEY_FALLBACK_2' : i === 3 ? 'BREVO_SMTP_KEY' : 'VERCEL_BREVO_SMTP_KEY_FALLBACK_3'}`);
+        return key.trim();
+      }
+    }
+    return null;
+  };
+
+  const BREVO_KEY = getBrevoKey();
+  const BREVO_SMTP_KEY = getBrevoSmtpKey();
   const OTP_EXPIRY_MINUTES = 5;
 
   // Debug logging
@@ -287,23 +330,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     hasBrevoKey: !!BREVO_KEY,
     hasBrevoSmtpKey: !!BREVO_SMTP_KEY,
     apiKeyPrefix: BREVO_KEY ? BREVO_KEY.substring(0, 10) + '...' : 'NOT SET',
+    hasFallback1: !!process.env.VERCEL_BREVO_KEY_FALLBACK_1,
+    hasFallback2: !!process.env.VERCEL_BREVO_KEY_FALLBACK_2,
     email: normalizedEmail,
   });
 
-  // Strictly require BREVO API keys - no mock/test mode allowed
-  if (!BREVO_KEY || BREVO_KEY.trim() === '') {
-    console.error('send-otp: Missing or empty VERCEL_BREVO_KEY environment variable');
+  // Check for BREVO API keys with fallback support
+  if (!BREVO_KEY) {
+    console.error('send-otp: Missing BREVO API key in all fallback sources');
+    console.error('send-otp: Checked keys:', {
+      VERCEL_BREVO_KEY: !!process.env.VERCEL_BREVO_KEY,
+      VERCEL_BREVO_KEY_FALLBACK_1: !!process.env.VERCEL_BREVO_KEY_FALLBACK_1,
+      VERCEL_BREVO_KEY_FALLBACK_2: !!process.env.VERCEL_BREVO_KEY_FALLBACK_2,
+      BREVO_KEY: !!process.env.BREVO_KEY,
+      BREVO_API_KEY: !!process.env.BREVO_API_KEY,
+    });
     return res.status(500).json({ 
       success: false,
-      error: 'BREVO API key not configured. Please set VERCEL_BREVO_KEY environment variable.' 
+      error: 'BREVO API key not configured. Please set VERCEL_BREVO_KEY or one of the fallback environment variables.' 
     });
   }
 
-  if (!BREVO_SMTP_KEY || BREVO_SMTP_KEY.trim() === '') {
-    console.error('send-otp: Missing or empty VERCEL_BREVO_SMTP_KEY environment variable');
+  if (!BREVO_SMTP_KEY) {
+    console.error('send-otp: Missing BREVO SMTP key in all fallback sources');
+    console.error('send-otp: Checked keys:', {
+      VERCEL_BREVO_SMTP_KEY: !!process.env.VERCEL_BREVO_SMTP_KEY,
+      VERCEL_BREVO_SMTP_KEY_FALLBACK_1: !!process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_1,
+      VERCEL_BREVO_SMTP_KEY_FALLBACK_2: !!process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_2,
+      BREVO_SMTP_KEY: !!process.env.BREVO_SMTP_KEY,
+    });
     return res.status(500).json({ 
       success: false,
-      error: 'BREVO SMTP key not configured. Please set VERCEL_BREVO_SMTP_KEY environment variable.' 
+      error: 'BREVO SMTP key not configured. Please set VERCEL_BREVO_SMTP_KEY or one of the fallback environment variables.' 
     });
   }
 
@@ -427,11 +485,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Send OTP via BREVO Transactional Email API
+    // Send OTP via BREVO Transactional Email API with fallback key support
     let emailData: any;
     let emailResponse: Response;
-    try {
-      // BREVO Transactional Email API endpoint
+    let usedKeyIndex = 0;
+    
+    // Function to try sending email with a specific key
+    const trySendEmail = async (apiKey: string, keyName: string): Promise<{ response: Response; data: any }> => {
       const emailHtml = `
         <!DOCTYPE html>
         <html>
@@ -484,24 +544,101 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         hasTextContent: !!emailPayload.textContent,
       });
 
-      emailResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'api-key': BREVO_KEY,
+          'api-key': apiKey,
         },
         body: JSON.stringify(emailPayload),
       });
 
-      const responseText = await emailResponse.text();
-      console.log('send-otp: BREVO Raw Response:', {
-        status: emailResponse.status,
-        statusText: emailResponse.statusText,
-        headers: Object.fromEntries(emailResponse.headers.entries()),
+      const responseText = await response.text();
+      console.log(`send-otp: BREVO Raw Response (using ${keyName}):`, {
+        status: response.status,
+        statusText: response.statusText,
         body: responseText,
       });
 
-      if (!emailResponse.ok) {
+      if (!response.ok) {
+        const errorData = responseText ? JSON.parse(responseText) : {};
+        return { response, data: errorData };
+      }
+
+      let parsedData: any = {};
+      try {
+        parsedData = responseText ? JSON.parse(responseText) : {};
+      } catch (parseError) {
+        if (response.status === 201) {
+          parsedData = { success: true };
+        }
+      }
+
+      return { response, data: parsedData };
+    };
+
+    try {
+      // Try sending with primary key first
+      const allKeys = [
+        { key: BREVO_KEY, name: 'VERCEL_BREVO_KEY' },
+        { key: process.env.VERCEL_BREVO_KEY_FALLBACK_1, name: 'VERCEL_BREVO_KEY_FALLBACK_1' },
+        { key: process.env.VERCEL_BREVO_KEY_FALLBACK_2, name: 'VERCEL_BREVO_KEY_FALLBACK_2' },
+        { key: process.env.BREVO_KEY, name: 'BREVO_KEY' },
+        { key: process.env.BREVO_API_KEY, name: 'BREVO_API_KEY' },
+        { key: process.env.VERCEL_BREVO_KEY_FALLBACK_3, name: 'VERCEL_BREVO_KEY_FALLBACK_3' },
+      ].filter(k => k.key && k.key.trim() !== '');
+
+      console.log(`send-otp: Attempting to send email with ${allKeys.length} available key(s)`);
+
+      let emailSent = false;
+      let lastError: any = null;
+
+      for (let i = 0; i < allKeys.length; i++) {
+        const { key, name } = allKeys[i];
+        usedKeyIndex = i;
+        
+        try {
+          console.log(`send-otp: Trying key ${i + 1}/${allKeys.length}: ${name}`);
+          const result = await trySendEmail(key, name);
+          emailResponse = result.response;
+          emailData = result.data;
+
+          if (emailResponse.ok || emailResponse.status === 201) {
+            console.log(`send-otp: Successfully sent email using ${name}`);
+            emailSent = true;
+            break;
+          } else if (emailResponse.status === 401) {
+            // Unauthorized - try next key
+            console.warn(`send-otp: Key ${name} returned 401 (unauthorized), trying next key...`);
+            lastError = new Error(`BREVO API error: ${emailResponse.status} - ${JSON.stringify(emailData)}`);
+            continue;
+          } else {
+            // Other error - throw immediately
+            throw new Error(`BREVO API error: ${emailResponse.status} - ${JSON.stringify(emailData)}`);
+          }
+        } catch (keyError: any) {
+          if (keyError.message?.includes('401') || keyError.message?.includes('unauthorized')) {
+            console.warn(`send-otp: Key ${name} failed with 401, trying next key...`);
+            lastError = keyError;
+            continue;
+          }
+          throw keyError;
+        }
+      }
+
+      if (!emailSent) {
+        console.error('send-otp: All BREVO keys failed');
+        throw lastError || new Error('All BREVO API keys failed');
+      }
+
+      const responseText = emailResponse.status === 201 ? '{}' : JSON.stringify(emailData);
+      console.log('send-otp: BREVO Final Response:', {
+        status: emailResponse.status,
+        statusText: emailResponse.statusText,
+        body: responseText,
+      });
+
+      if (!emailResponse.ok && emailResponse.status !== 201) {
         console.error('send-otp: BREVO API returned non-OK status:', {
           status: emailResponse.status,
           statusText: emailResponse.statusText,
@@ -510,20 +647,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         throw new Error(`BREVO API error: ${emailResponse.status} - ${responseText}`);
       }
 
-      try {
-        emailData = responseText ? JSON.parse(responseText) : {};
-      } catch (parseError: unknown) {
-        const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
-        console.error('send-otp: Failed to parse BREVO response as JSON:', errorMessage);
-        console.error('send-otp: Response text:', responseText);
-        // BREVO may return empty response on success, which is fine
-        if (emailResponse.status === 201) {
-          emailData = { success: true };
-        } else {
-          throw new Error(`Invalid JSON response from BREVO: ${responseText}`);
-        }
-      }
-
+      // emailData is already parsed in trySendEmail function
       console.log('send-otp: BREVO Parsed Response:', JSON.stringify(emailData, null, 2));
       
       // Log important response fields
