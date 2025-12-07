@@ -130,62 +130,93 @@ export const TournamentDetailPage: React.FC = () => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-bg-secondary border border-gray-800 rounded-lg p-6 mb-6"
+          className="bg-bg-secondary border border-gray-800 rounded-lg overflow-hidden mb-6"
         >
-          <h1 className="text-3xl font-heading text-primary mb-4">{tournament.name}</h1>
+          <div className="p-4">
+            <h1 className="text-lg font-heading text-primary mb-3">{tournament.name}</h1>
 
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-bg rounded-lg p-4">
-              <p className="text-sm text-gray-400 mb-1">Entry Fee</p>
-              <p className="text-xl font-heading text-primary">{tournament.entry_amount} pts</p>
+            {/* Horizontal Three-Column Layout */}
+            <div className="flex items-center border-t border-b border-gray-700 py-4 mb-3">
+              {/* Left Column: Date and Time */}
+              <div className="flex-1 flex flex-col items-center text-center border-r border-gray-700 pr-4">
+                <div className="text-white text-sm font-body space-y-0.5">
+                  <div>{new Date(tournament.start_time).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</div>
+                  <div>{new Date(tournament.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</div>
+                </div>
+              </div>
+
+              {/* Middle Column: Entry Fee */}
+              <div className="flex-1 flex flex-col items-center text-center border-r border-gray-700 px-4">
+                <div className="text-white text-sm mb-1">Entry Fee</div>
+                <div className="text-white text-lg font-heading">{tournament.entry_amount} Points</div>
+              </div>
+
+              {/* Right Column: Per Kill Rewards */}
+              <div className="flex-1 flex flex-col items-center text-center pl-4">
+                <div className="text-white text-sm mb-1">Per Kill</div>
+                <div className="text-white text-lg font-heading">
+                  {tournament.per_kill_point || 0} Points
+                </div>
+              </div>
             </div>
-            <div className="bg-bg rounded-lg p-4">
-              <p className="text-sm text-gray-400 mb-1">Players</p>
-              <p className="text-xl font-heading text-primary">
-                {tournament.current_players}/{tournament.max_players}
-              </p>
+
+            <div className="mb-3">
+              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                <span>{tournament.current_players} of {tournament.max_players} Players</span>
+                <span>{Math.round((tournament.current_players / tournament.max_players) * 100)}%</span>
+              </div>
+              <div className="w-full bg-bg-tertiary rounded-full h-2">
+                <motion.div
+                  className={`h-2 rounded-full ${
+                    tournament.current_players >= tournament.max_players ? 'bg-accent' : 'bg-primary'
+                  }`}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(tournament.current_players / tournament.max_players) * 100}%` }}
+                  transition={{ duration: 0.5 }}
+                />
+              </div>
             </div>
-            <div className="bg-bg rounded-lg p-4">
-              <p className="text-sm text-gray-400 mb-1">Start Time</p>
-              <p className="text-sm text-white">
-                {new Date(tournament.start_time).toLocaleString()}
-              </p>
-            </div>
-            <div className="bg-bg rounded-lg p-4">
-              <p className="text-sm text-gray-400 mb-1">Status</p>
-              <p
-                className={`text-sm uppercase font-heading ${
+
+            <div className="flex items-center justify-between mb-3">
+              <span
+                className={`text-xs px-2 py-1 rounded font-heading ${
                   effectiveStatus === 'upcoming'
-                    ? 'text-orange-300'
+                    ? 'bg-orange-900 text-orange-300'
                     : effectiveStatus === 'live'
-                    ? 'text-green-300'
+                    ? 'bg-green-900 text-green-300 animate-pulse'
                     : effectiveStatus === 'completed'
-                    ? 'text-blue-300'
+                    ? 'bg-blue-900 text-blue-300'
                     : effectiveStatus === 'cancelled'
-                    ? 'text-red-300'
-                    : 'text-gray-400'
+                    ? 'bg-red-900 text-red-300'
+                    : 'bg-gray-800 text-gray-400'
                 }`}
               >
-                {effectiveStatus}
-              </p>
+                {effectiveStatus === 'live' ? 'Live Now' : effectiveStatus === 'upcoming' ? 'Upcoming' : effectiveStatus === 'completed' ? 'Completed' : effectiveStatus === 'cancelled' ? 'Cancelled' : effectiveStatus}
+              </span>
             </div>
           </div>
 
           {tournament.status === 'cancelled' && (
-            <div className="bg-red-900/20 border border-red-800 rounded-lg p-4 mb-6">
-              <p className="text-red-300 font-heading">This tournament has been cancelled</p>
+            <div className="px-4 pb-4">
+              <div className="bg-red-900/20 border border-red-800 rounded-lg p-4 mb-6">
+                <p className="text-red-300 font-heading">This tournament has been cancelled</p>
+              </div>
             </div>
           )}
 
           {tournament.status === 'completed' && (
-            <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4 mb-6">
-              <p className="text-blue-300 font-heading">This tournament has been completed</p>
+            <div className="px-4 pb-4">
+              <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4 mb-6">
+                <p className="text-blue-300 font-heading">This tournament has been completed</p>
+              </div>
             </div>
           )}
 
           {/* Kill Leaderboard for completed tournaments */}
           {effectiveStatus === 'completed' && tournament.player_kills && Object.keys(tournament.player_kills).length > 0 && (
-            <KillLeaderboard tournament={tournament} currentUserMobile={user?.mobile_no} />
+            <div className="px-4 pb-4">
+              <KillLeaderboard tournament={tournament} currentUserEmail={user?.email} />
+            </div>
           )}
 
           {/* Credentials Section */}
@@ -193,8 +224,9 @@ export const TournamentDetailPage: React.FC = () => {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-bg border border-primary rounded-lg p-4 mb-6"
+              className="px-4 pb-4"
             >
+              <div className="bg-bg border border-primary rounded-lg p-4 mb-6">
               <div className="flex items-center gap-2 mb-4">
                 <HiLockOpen className="w-5 h-5 text-primary" />
                 <h3 className="text-lg font-heading text-primary">Tournament Credentials</h3>
@@ -250,40 +282,49 @@ export const TournamentDetailPage: React.FC = () => {
                   </div>
                 )}
               </div>
+              </div>
             </motion.div>
           ) : !user ? (
-            <div className="bg-bg-tertiary border border-gray-700 rounded-lg p-4 mb-6">
-              <div className="flex items-center gap-2">
-                <HiLockClosed className="w-5 h-5 text-gray-500" />
-                <p className="text-sm text-gray-400">Login and enroll to view credentials</p>
+            <div className="px-4 pb-4">
+              <div className="bg-bg-tertiary border border-gray-700 rounded-lg p-4 mb-6">
+                <div className="flex items-center gap-2">
+                  <HiLockClosed className="w-5 h-5 text-gray-500" />
+                  <p className="text-sm text-gray-400">Login and enroll to view credentials</p>
+                </div>
               </div>
             </div>
           ) : !user.enrolled_tournaments.includes(tournament.id) ? (
-            <div className="bg-bg-tertiary border border-gray-700 rounded-lg p-4 mb-6">
-              <div className="flex items-center gap-2">
-                <HiLockClosed className="w-5 h-5 text-gray-500" />
-                <p className="text-sm text-gray-400">Enroll in this tournament to view credentials</p>
+            <div className="px-4 pb-4">
+              <div className="bg-bg-tertiary border border-gray-700 rounded-lg p-4 mb-6">
+                <div className="flex items-center gap-2">
+                  <HiLockClosed className="w-5 h-5 text-gray-500" />
+                  <p className="text-sm text-gray-400">Enroll in this tournament to view credentials</p>
+                </div>
               </div>
             </div>
           ) : tournament.reveal_time && new Date() < tournament.reveal_time ? (
-            <div className="bg-bg-tertiary border border-gray-700 rounded-lg p-4 mb-6">
-              <div className="flex items-center gap-2">
-                <HiLockClosed className="w-5 h-5 text-gray-500" />
-                <p className="text-sm text-gray-400">
-                  Credentials will be revealed on:{' '}
-                  <span className="text-primary">{new Date(tournament.reveal_time).toLocaleString()}</span>
-                </p>
+            <div className="px-4 pb-4">
+              <div className="bg-bg-tertiary border border-gray-700 rounded-lg p-4 mb-6">
+                <div className="flex items-center gap-2">
+                  <HiLockClosed className="w-5 h-5 text-gray-500" />
+                  <p className="text-sm text-gray-400">
+                    Credentials will be revealed on:{' '}
+                    <span className="text-primary">{new Date(tournament.reveal_time).toLocaleString()}</span>
+                  </p>
+                </div>
               </div>
             </div>
           ) : null}
 
-          <EnrollButton 
-            tournament={tournament} 
-            onEnrollSuccess={() => {
-              // Refresh the page to show updated enrollment status
-              window.location.reload();
-            }}
-          />
+          <div className="px-4 pb-4">
+            <EnrollButton 
+              tournament={tournament} 
+              onEnrollSuccess={() => {
+                // Refresh the page to show updated enrollment status
+                window.location.reload();
+              }}
+            />
+          </div>
         </motion.div>
       </div>
     </div>
@@ -293,10 +334,10 @@ export const TournamentDetailPage: React.FC = () => {
 // Kill Leaderboard Component
 interface KillLeaderboardProps {
   tournament: Tournament;
-  currentUserMobile?: string;
+  currentUserEmail?: string;
 }
 
-const KillLeaderboard: React.FC<KillLeaderboardProps> = ({ tournament, currentUserMobile }) => {
+const KillLeaderboard: React.FC<KillLeaderboardProps> = ({ tournament, currentUserEmail }) => {
   const [usersSnapshot] = useCollection(collection(firestore, 'users'));
 
   const leaderboard = useMemo(() => {
@@ -305,7 +346,7 @@ const KillLeaderboard: React.FC<KillLeaderboardProps> = ({ tournament, currentUs
     const userMap = new Map<string, { name: string; ff_id: string }>();
     usersSnapshot.docs.forEach((doc) => {
       const data = doc.data();
-      userMap.set(data.mobile_no, {
+      userMap.set(data.email, {
         name: data.name || 'Unknown',
         ff_id: data.ff_id || 'N/A',
       });
@@ -314,16 +355,16 @@ const KillLeaderboard: React.FC<KillLeaderboardProps> = ({ tournament, currentUs
     const pointsPerKill = tournament.payment_info?.points_per_kill || 10;
 
     return Object.entries(tournament.player_kills)
-      .map(([mobile, data]) => {
+      .map(([email, data]) => {
         // Calculate winning points: use custom credit if available, otherwise kills * points_per_kill
-        const customCredit = tournament.payment_info?.custom_credits?.[mobile];
+        const customCredit = tournament.payment_info?.custom_credits?.[email];
         const winningPoints = customCredit || (data.kills * pointsPerKill);
         
         return {
-          mobile,
+          email,
           kills: data.kills,
           winningPoints,
-          ...userMap.get(mobile),
+          ...userMap.get(email),
         };
       })
       .sort((a, b) => b.kills - a.kills);
@@ -343,10 +384,10 @@ const KillLeaderboard: React.FC<KillLeaderboardProps> = ({ tournament, currentUs
       </h3>
       <div className="space-y-2">
         {leaderboard.map((player, index) => {
-          const isCurrentUser = player.mobile === currentUserMobile;
+          const isCurrentUser = player.email === currentUserEmail;
           return (
             <motion.div
-              key={player.mobile}
+              key={player.email}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.05 }}

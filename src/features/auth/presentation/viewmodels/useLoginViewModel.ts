@@ -2,23 +2,23 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOTP } from '../../../../hooks/useOTP';
 import { useAuth } from '../../../../contexts/AuthContext';
-import { mobileSchema, userNameSchema, ffIdSchema, passwordSchema, otpSchema } from '../../../../utils/validations';
+import { emailSchema, userNameSchema, ffIdSchema, passwordSchema, otpSchema } from '../../../../utils/validations';
 import { verifyOTP } from '../../../../services/otpService';
 import toast from 'react-hot-toast';
 
-type LoginStep = 'mobile' | 'login' | 'signup' | 'otp' | 'forgot_password' | 'reset_password';
+type LoginStep = 'email' | 'login' | 'signup' | 'otp' | 'forgot_password' | 'reset_password';
 type FlowType = 'login' | 'signup' | 'forgot_password';
 
 interface SignupData {
   name: string;
   ff_id: string;
-  mobileNumber: string;
+  email: string;
   password?: string;
 }
 
 export interface UseLoginViewModelReturn {
   // State
-  mobileNumber: string;
+  email: string;
   step: LoginStep;
   enteredOTP: string;
   name: string;
@@ -36,7 +36,7 @@ export interface UseLoginViewModelReturn {
   flowType: FlowType;
 
   // Actions
-  setMobileNumber: (value: string) => void;
+  setEmail: (value: string) => void;
   setEnteredOTP: (value: string) => void;
   setName: (value: string) => void;
   setFfId: (value: string) => void;
@@ -44,7 +44,7 @@ export interface UseLoginViewModelReturn {
   setConfirmPassword: (value: string) => void;
   setNewPassword: (value: string) => void;
   setConfirmNewPassword: (value: string) => void;
-  handleMobileSubmit: (e?: React.FormEvent) => Promise<void>;
+  handleEmailSubmit: (e?: React.FormEvent) => Promise<void>;
   handlePasswordLogin: (e: React.FormEvent) => Promise<void>;
   handleSignupSubmit: (e: React.FormEvent) => Promise<void>;
   handleOTPSubmit: (e: React.FormEvent) => Promise<void>;
@@ -56,8 +56,8 @@ export interface UseLoginViewModelReturn {
 export const useLoginViewModel = (): UseLoginViewModelReturn => {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [mobileNumber, setMobileNumber] = useState('');
-  const [step, setStep] = useState<LoginStep>('mobile');
+  const [email, setEmail] = useState('');
+  const [step, setStep] = useState<LoginStep>('email');
   const [enteredOTP, setEnteredOTP] = useState('');
   const [name, setName] = useState('');
   const [ffId, setFfId] = useState('');
@@ -83,13 +83,14 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
     resetOTP,
   } = useOTP();
 
-  const handleMobileSubmit = useCallback(async (e?: React.FormEvent) => {
+  const handleEmailSubmit = useCallback(async (e?: React.FormEvent) => {
     if (e) {
       e.preventDefault();
     }
 
-    if (mobileNumber.length !== 10) {
-      toast.error('Please enter a valid 10-digit mobile number');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast.error('Please enter a valid email address');
       return;
     }
 
@@ -100,11 +101,11 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
     setIsCheckingUser(true);
 
     try {
-      mobileSchema.parse(mobileNumber);
+      emailSchema.parse(email);
 
       let userExists = false;
       try {
-        userExists = await checkUserExists(mobileNumber);
+        userExists = await checkUserExists(email);
       } catch (checkError: any) {
         const errorMessage = checkError.message || 'Failed to check user. Please try again.';
 
@@ -132,7 +133,7 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
         setStep('login');
       } else {
         // New user - send OTP and go to signup
-        const success = await sendOTPCode(mobileNumber);
+        const success = await sendOTPCode(email);
         if (success) {
           setStep('signup');
         } else {
@@ -140,11 +141,11 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
         }
       }
     } catch (error: any) {
-      toast.error(error.message || 'Invalid mobile number');
+      toast.error(error.message || 'Invalid email address');
     } finally {
       setIsCheckingUser(false);
     }
-  }, [mobileNumber, isLoading, isCheckingUser, checkUserExists, sendOTPCode]);
+  }, [email, isLoading, isCheckingUser, checkUserExists, sendOTPCode]);
 
   const handlePasswordLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,20 +155,20 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
         return;
       }
 
-      const success = await loginWithPassword(mobileNumber, password);
+      const success = await loginWithPassword(email, password);
       if (success) {
-        await login(mobileNumber);
+        await login(email);
         navigate('/');
         // Reset form
-        setMobileNumber('');
+        setEmail('');
         setPassword('');
-        setStep('mobile');
+        setStep('email');
         resetOTP();
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to login');
     }
-  }, [mobileNumber, password, loginWithPassword, login, navigate, resetOTP]);
+  }, [email, password, loginWithPassword, login, navigate, resetOTP]);
 
   const handleSignupSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,7 +195,7 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
     if (flowType === 'forgot_password') {
       try {
         otpSchema.parse(enteredOTP);
-        const result = await verifyOTP(mobileNumber, enteredOTP);
+        const result = await verifyOTP(email, enteredOTP);
         
         if (result.success) {
           // Mark OTP as verified before allowing access to reset password screen
@@ -216,23 +217,23 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
     }
 
     const signupData: SignupData | undefined = isNewUser
-      ? { name, ff_id: ffId, mobileNumber, password }
+      ? { name, ff_id: ffId, email, password }
       : undefined;
 
     try {
-      const success = await verifyOTPCode(enteredOTP, mobileNumber, signupData);
+      const success = await verifyOTPCode(enteredOTP, email, signupData);
 
       if (success) {
-        await login(mobileNumber);
+        await login(email);
         navigate('/');
         // Reset form
-        setMobileNumber('');
+        setEmail('');
         setEnteredOTP('');
         setName('');
         setFfId('');
         setPassword('');
         setConfirmPassword('');
-        setStep('mobile');
+        setStep('email');
         setIsNewUser(false);
         setFlowType('login');
         resetOTP();
@@ -240,19 +241,20 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
     } catch (error: any) {
       toast.error(error.message || 'Failed to verify OTP');
     }
-  }, [isNewUser, name, ffId, mobileNumber, password, enteredOTP, flowType, verifyOTPCode, login, navigate, resetOTP]);
+  }, [isNewUser, name, ffId, email, password, enteredOTP, flowType, verifyOTPCode, login, navigate, resetOTP]);
 
   const handleForgotPassword = useCallback(async () => {
     try {
-      if (!mobileNumber || mobileNumber.length !== 10) {
-        toast.error('Please enter your mobile number first');
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!email || !emailRegex.test(email)) {
+        toast.error('Please enter your email address first');
         return;
       }
 
-      mobileSchema.parse(mobileNumber);
+      emailSchema.parse(email);
       setFlowType('forgot_password');
       setIsOTPVerifiedForReset(false); // Reset verification state
-      const success = await sendOTPCode(mobileNumber);
+      const success = await sendOTPCode(email);
       
       if (success) {
         setStep('otp');
@@ -262,7 +264,7 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
     } catch (error: any) {
       toast.error(error.message || 'Failed to send OTP');
     }
-  }, [mobileNumber, sendOTPCode]);
+  }, [email, sendOTPCode]);
 
   const handleResetPassword = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -284,16 +286,16 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
       }
 
       // OTP is already verified in handleOTPSubmit, so skip verification
-      const success = await resetPassword(mobileNumber, enteredOTP, newPassword, true);
+      const success = await resetPassword(email, enteredOTP, newPassword, true);
       
       if (success) {
         toast.success('Password reset successfully! You can now login with your new password.');
         // Reset form and go back to login
-        setMobileNumber('');
+        setEmail('');
         setEnteredOTP('');
         setNewPassword('');
         setConfirmNewPassword('');
-        setStep('mobile');
+        setStep('email');
         setFlowType('login');
         setIsOTPVerifiedForReset(false);
         resetOTP();
@@ -301,7 +303,7 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
     } catch (error: any) {
       toast.error(error.message || 'Failed to reset password');
     }
-  }, [mobileNumber, enteredOTP, newPassword, confirmNewPassword, isOTPVerifiedForReset, resetPassword, resetOTP]);
+  }, [email, enteredOTP, newPassword, confirmNewPassword, isOTPVerifiedForReset, resetPassword, resetOTP]);
 
   // Security: Protect reset_password step - only allow if OTP was verified
   useEffect(() => {
@@ -317,13 +319,13 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
 
   const handleBack = useCallback(() => {
     if (step === 'signup') {
-      setStep('mobile');
+      setStep('email');
       setName('');
       setFfId('');
       setPassword('');
       setConfirmPassword('');
     } else if (step === 'login') {
-      setStep('mobile');
+      setStep('email');
       setPassword('');
     } else if (step === 'otp' && flowType === 'forgot_password') {
       // Security fix: Go back to login step, not reset_password
@@ -334,7 +336,7 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
       setFlowType('login');
       resetOTP();
     } else if (step === 'reset_password') {
-      // Security fix: Go back to login step (or mobile if no login step)
+      // Security fix: Go back to login step (or email if no login step)
       // Only allow access to reset_password if OTP was verified
       setIsOTPVerifiedForReset(false);
       setStep('login');
@@ -344,7 +346,7 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
       setFlowType('login');
       resetOTP();
     } else {
-      setStep('mobile');
+      setStep('email');
       setEnteredOTP('');
       resetOTP();
     }
@@ -352,7 +354,7 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
 
   return {
     // State
-    mobileNumber,
+    email,
     step,
     enteredOTP,
     name,
@@ -370,7 +372,7 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
     flowType,
 
     // Actions
-    setMobileNumber,
+    setEmail,
     setEnteredOTP,
     setName,
     setFfId,
@@ -378,7 +380,7 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
     setConfirmPassword,
     setNewPassword,
     setConfirmNewPassword,
-    handleMobileSubmit,
+    handleEmailSubmit,
     handlePasswordLogin,
     handleSignupSubmit,
     handleOTPSubmit,

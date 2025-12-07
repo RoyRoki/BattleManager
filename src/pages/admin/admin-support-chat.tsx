@@ -16,9 +16,9 @@ export const AdminSupportChat: React.FC = () => {
 
   // Check for user param in URL
   useEffect(() => {
-    const userMobile = searchParams.get('user');
-    if (userMobile) {
-      setSelectedChat(userMobile);
+    const userEmail = searchParams.get('user');
+    if (userEmail) {
+      setSelectedChat(userEmail);
     }
   }, [searchParams]);
 
@@ -37,14 +37,14 @@ export const AdminSupportChat: React.FC = () => {
   const filteredChats = supportChats.filter((chat) => {
     const query = searchQuery.toLowerCase();
     return (
-      chat.user_mobile.toLowerCase().includes(query) ||
+      chat.user_email.toLowerCase().includes(query) ||
       chat.user_name?.toLowerCase().includes(query)
     );
   });
 
-  const handleSelectChat = (userMobile: string) => {
-    setSelectedChat(userMobile);
-    setSearchParams({ user: userMobile });
+  const handleSelectChat = (userEmail: string) => {
+    setSelectedChat(userEmail);
+    setSearchParams({ user: userEmail });
   };
 
   const handleBackToList = () => {
@@ -130,10 +130,10 @@ export const AdminSupportChat: React.FC = () => {
                 <div className="divide-y divide-gray-800">
                   {filteredChats.map((chat) => (
                     <ChatListItem
-                      key={chat.user_mobile}
+                      key={chat.user_email}
                       chat={chat}
-                      isSelected={selectedChat === chat.user_mobile}
-                      onClick={() => handleSelectChat(chat.user_mobile)}
+                      isSelected={selectedChat === chat.user_email}
+                      onClick={() => handleSelectChat(chat.user_email)}
                     />
                   ))}
                 </div>
@@ -149,7 +149,7 @@ export const AdminSupportChat: React.FC = () => {
           >
             {selectedChat ? (
               <SupportChatInterface
-                targetUserMobile={selectedChat}
+                targetUserEmail={selectedChat}
                 showHeader={true}
               />
             ) : (
@@ -174,7 +174,7 @@ export const AdminSupportChat: React.FC = () => {
                 className="bg-bg-secondary border border-gray-800 rounded-xl h-[calc(100vh-200px)] overflow-hidden"
               >
                 <SupportChatInterface
-                  targetUserMobile={selectedChat}
+                  targetUserEmail={selectedChat}
                   onBack={handleBackToList}
                   showHeader={true}
                 />
@@ -224,10 +224,10 @@ export const AdminSupportChat: React.FC = () => {
                     <div className="divide-y divide-gray-800">
                       {filteredChats.map((chat) => (
                         <ChatListItem
-                          key={chat.user_mobile}
+                          key={chat.user_email}
                           chat={chat}
                           isSelected={false}
-                          onClick={() => handleSelectChat(chat.user_mobile)}
+                          onClick={() => handleSelectChat(chat.user_email)}
                         />
                       ))}
                     </div>
@@ -261,14 +261,14 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, isSelected, onClick }
       <div className="flex items-start gap-3">
         {/* Avatar */}
         <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-bg font-heading text-lg font-bold">
-          {chat.user_name?.[0]?.toUpperCase() || chat.user_mobile[0]}
+          {chat.user_name?.[0]?.toUpperCase() || chat.user_email[0]}
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <span className="font-heading text-white truncate">
-              {chat.user_name || chat.user_mobile}
+              {chat.user_name || chat.user_email}
             </span>
             {chat.last_message_time && (
               <span className="text-xs text-gray-500 flex-shrink-0">
@@ -288,7 +288,7 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, isSelected, onClick }
               <span className="text-xs text-primary">✓ Replied</span>
             ) : null}
           </div>
-          <p className="text-xs text-gray-500 mt-1">{chat.user_mobile}</p>
+          <p className="text-xs text-gray-500 mt-1">{chat.user_email}</p>
         </div>
       </div>
     </motion.button>

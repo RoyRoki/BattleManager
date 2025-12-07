@@ -1,4 +1,4 @@
-// Vercel serverless function for sending OTP via Fast2SMS
+// Vercel serverless function for sending OTP via BREVO SMTP
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getDatabase } from 'firebase-admin/database';
@@ -113,29 +113,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { mobileNumber } = req.body;
+  const { email } = req.body;
 
-  if (!mobileNumber || !/^[6-9]\d{9}$/.test(mobileNumber)) {
-    return res.status(400).json({ error: 'Valid 10-digit mobile number is required' });
+  // Email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Valid email address is required' });
   }
 
-  const FAST2SMS_API_KEY = process.env.VERCEL_FAST2SMS_API_KEY;
+  // Normalize email (lowercase) for storage
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Encode email for Firebase Realtime Database path (replace invalid chars)
+  // Firebase paths can't contain: . # $ [ ]
+  const encodedEmail = normalizedEmail.replace(/[.#$[\]]/g, (char) => {
+    const map: Record<string, string> = { '.': '_DOT_', '#': '_HASH_', '$': '_DOLLAR_', '[': '_LBRACK_', ']': '_RBRACK_' };
+    return map[char] || char;
+  });
+
+  const BREVO_KEY = process.env.VERCEL_BREVO_KEY;
+  const BREVO_SMTP_KEY = process.env.VERCEL_BREVO_SMTP_KEY;
   const OTP_EXPIRY_MINUTES = 5;
 
   // Debug logging
   console.log('send-otp: Environment check:', {
     NODE_ENV: process.env.NODE_ENV,
-    hasFast2SMSKey: !!FAST2SMS_API_KEY,
-    apiKeyPrefix: FAST2SMS_API_KEY ? FAST2SMS_API_KEY.substring(0, 10) + '...' : 'NOT SET',
-    mobileNumber: mobileNumber,
+    hasBrevoKey: !!BREVO_KEY,
+    hasBrevoSmtpKey: !!BREVO_SMTP_KEY,
+    apiKeyPrefix: BREVO_KEY ? BREVO_KEY.substring(0, 10) + '...' : 'NOT SET',
+    email: normalizedEmail,
   });
 
-  // Strictly require Fast2SMS API key - no mock/test mode allowed
-  if (!FAST2SMS_API_KEY || FAST2SMS_API_KEY.trim() === '') {
-    console.error('send-otp: Missing or empty VERCEL_FAST2SMS_API_KEY environment variable');
+  // Strictly require BREVO API keys - no mock/test mode allowed
+  if (!BREVO_KEY || BREVO_KEY.trim() === '') {
+    console.error('send-otp: Missing or empty VERCEL_BREVO_KEY environment variable');
     return res.status(500).json({ 
       success: false,
-      error: 'Fast2SMS API key not configured. Please set VERCEL_FAST2SMS_API_KEY environment variable.' 
+      error: 'BREVO API key not configured. Please set VERCEL_BREVO_KEY environment variable.' 
+    });
+  }
+
+  if (!BREVO_SMTP_KEY || BREVO_SMTP_KEY.trim() === '') {
+    console.error('send-otp: Missing or empty VERCEL_BREVO_SMTP_KEY environment variable');
+    return res.status(500).json({ 
+      success: false,
+      error: 'BREVO SMTP key not configured. Please set VERCEL_BREVO_SMTP_KEY environment variable.' 
     });
   }
 
@@ -157,7 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      const otpRef = db.ref(`otps/${mobileNumber}`);
+      const otpRef = db.ref(`otps/${encodedEmail}`);
       await otpRef.set({
         otp: otp,
         createdAt: Date.now(),
@@ -175,7 +197,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }, OTP_EXPIRY_MINUTES * 60 * 1000);
 
-      console.log('send-otp: OTP stored in Firebase for mobile:', mobileNumber);
+      console.log('send-otp: OTP stored in Firebase for email:', normalizedEmail);
     } catch (firebaseError: any) {
       console.error('send-otp: Firebase storage error:', firebaseError);
       return res.status(500).json({
@@ -184,88 +206,124 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Send OTP via Fast2SMS API
-    let smsData: any;
+    // Send OTP via BREVO Transactional Email API
+    let emailData: any;
+    let emailResponse: Response;
     try {
-      // Fast2SMS API format - using 'q' route for OTP messages
-      // Fast2SMS API - using query parameters (as per Fast2SMS documentation)
-      const apiUrl = new URL('https://www.fast2sms.com/dev/bulkV2');
-      apiUrl.searchParams.append('authorization', FAST2SMS_API_KEY);
-      apiUrl.searchParams.append('route', 'q'); // 'q' route for OTP/transactional (doesn't require sender_id)
-      apiUrl.searchParams.append('message', `Your OTP is ${otp}. Valid for 5 minutes. Do not share this OTP with anyone.`);
-      apiUrl.searchParams.append('numbers', mobileNumber);
-      apiUrl.searchParams.append('flash', '0');
-      
-      const maskedUrl = apiUrl.toString().replace(FAST2SMS_API_KEY, 'HIDDEN');
-      console.log('send-otp: Fast2SMS Request Details:', {
-        url: maskedUrl,
-        route: 'dlt',
-        mobileNumber: mobileNumber,
-        messageLength: apiUrl.searchParams.get('message')?.length || 0,
-        apiKeyLength: FAST2SMS_API_KEY?.length || 0,
-        apiKeyPrefix: FAST2SMS_API_KEY?.substring(0, 10) || 'NOT SET',
+      // BREVO Transactional Email API endpoint
+      const emailHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .otp-box { background: #f4f4f4; border: 2px solid #00FF41; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0; }
+            .otp-code { font-size: 32px; font-weight: bold; color: #00FF41; letter-spacing: 5px; }
+            .warning { color: #FF0040; font-size: 14px; margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h2>Your BattleManager OTP</h2>
+            <p>Your One-Time Password (OTP) for BattleManager is:</p>
+            <div class="otp-box">
+              <div class="otp-code">${otp}</div>
+            </div>
+            <p>This OTP is valid for ${OTP_EXPIRY_MINUTES} minutes.</p>
+            <p class="warning"><strong>Do not share this OTP with anyone.</strong></p>
+            <p>If you didn't request this OTP, please ignore this email.</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const emailText = `Your BattleManager OTP is: ${otp}\n\nThis OTP is valid for ${OTP_EXPIRY_MINUTES} minutes.\n\nDo not share this OTP with anyone.\n\nIf you didn't request this OTP, please ignore this email.`;
+
+      const emailPayload = {
+        sender: {
+          name: 'BattleManager',
+          email: 'battlemanagerofficial@gmail.com',
+        },
+        to: [
+          {
+            email: normalizedEmail,
+          },
+        ],
+        subject: 'Your BattleManager OTP',
+        htmlContent: emailHtml,
+        textContent: emailText,
+      };
+
+      console.log('send-otp: BREVO Email Request Details:', {
+        to: normalizedEmail,
+        subject: emailPayload.subject,
+        hasHtmlContent: !!emailPayload.htmlContent,
+        hasTextContent: !!emailPayload.textContent,
       });
 
-      const smsResponse = await fetch(apiUrl.toString(), {
-        method: 'GET',
+      emailResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'api-key': BREVO_KEY,
         },
+        body: JSON.stringify(emailPayload),
       });
 
-      const responseText = await smsResponse.text();
-      console.log('send-otp: Fast2SMS Raw Response:', {
-        status: smsResponse.status,
-        statusText: smsResponse.statusText,
-        headers: Object.fromEntries(smsResponse.headers.entries()),
+      const responseText = await emailResponse.text();
+      console.log('send-otp: BREVO Raw Response:', {
+        status: emailResponse.status,
+        statusText: emailResponse.statusText,
+        headers: Object.fromEntries(emailResponse.headers.entries()),
         body: responseText,
       });
 
-      if (!smsResponse.ok) {
-        console.error('send-otp: Fast2SMS API returned non-OK status:', {
-          status: smsResponse.status,
-          statusText: smsResponse.statusText,
+      if (!emailResponse.ok) {
+        console.error('send-otp: BREVO API returned non-OK status:', {
+          status: emailResponse.status,
+          statusText: emailResponse.statusText,
           body: responseText,
         });
-        throw new Error(`Fast2SMS API error: ${smsResponse.status} - ${responseText}`);
+        throw new Error(`BREVO API error: ${emailResponse.status} - ${responseText}`);
       }
 
       try {
-        smsData = JSON.parse(responseText);
+        emailData = responseText ? JSON.parse(responseText) : {};
       } catch (parseError: unknown) {
         const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
-        console.error('send-otp: Failed to parse Fast2SMS response as JSON:', errorMessage);
+        console.error('send-otp: Failed to parse BREVO response as JSON:', errorMessage);
         console.error('send-otp: Response text:', responseText);
-        throw new Error(`Invalid JSON response from Fast2SMS: ${responseText}`);
+        // BREVO may return empty response on success, which is fine
+        if (emailResponse.status === 201) {
+          emailData = { success: true };
+        } else {
+          throw new Error(`Invalid JSON response from BREVO: ${responseText}`);
+        }
       }
 
-      console.log('send-otp: Fast2SMS Parsed Response:', JSON.stringify(smsData, null, 2));
+      console.log('send-otp: BREVO Parsed Response:', JSON.stringify(emailData, null, 2));
       
       // Log important response fields
-      if (smsData.request_id) {
-        console.log('send-otp: Fast2SMS Request ID:', smsData.request_id);
-      }
-      if (smsData.message) {
-        console.log('send-otp: Fast2SMS Message:', smsData.message);
-      }
-      if (smsData.return !== undefined) {
-        console.log('send-otp: Fast2SMS Return Status:', smsData.return);
+      if (emailData.messageId) {
+        console.log('send-otp: BREVO Message ID:', emailData.messageId);
       }
     } catch (fetchError: any) {
-      console.error('send-otp: Fast2SMS API call failed:', fetchError);
+      console.error('send-otp: BREVO API call failed:', fetchError);
       console.error('send-otp: Error details:', {
         message: fetchError.message,
         stack: fetchError.stack,
         name: fetchError.name,
       });
       
-      // Clean up Firebase entry if SMS failed
+      // Clean up Firebase entry if email failed
       if (otpStored) {
         try {
           const db = getDatabase();
           if (db) {
-            await db.ref(`otps/${mobileNumber}`).remove();
-            console.log('send-otp: Cleaned up OTP from Firebase after SMS failure');
+            await db.ref(`otps/${encodedEmail}`).remove();
+            console.log('send-otp: Cleaned up OTP from Firebase after email failure');
           }
         } catch (err) {
           console.error('send-otp: Error cleaning up OTP:', err);
@@ -274,57 +332,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       return res.status(500).json({
         success: false,
-        error: `Failed to send OTP via SMS: ${fetchError.message}`,
+        error: `Failed to send OTP via email: ${fetchError.message}`,
       });
     }
 
-    // Verify Fast2SMS response
-    // Fast2SMS returns { return: true } on success
-    if (smsData && smsData.return === true) {
-      console.log('send-otp: OTP sent successfully via Fast2SMS');
+    // Verify BREVO response
+    // BREVO returns 201 status on success
+    if (emailResponse.status === 201 || emailData?.messageId) {
+      console.log('send-otp: OTP sent successfully via BREVO');
       console.log('send-otp: OTP details:', {
-        mobileNumber: mobileNumber,
-        requestId: smsData.request_id || 'N/A',
+        email: normalizedEmail,
+        messageId: emailData?.messageId || 'N/A',
         otpGenerated: '***', // Don't log actual OTP
       });
       
       return res.status(200).json({
         success: true,
         message: 'OTP sent successfully',
-        requestId: smsData.request_id, // Return request ID for tracking
+        messageId: emailData?.messageId, // Return message ID for tracking
       });
     } else {
-      // Fast2SMS returned failure or unexpected response
-      console.error('send-otp: Fast2SMS returned failure or unexpected response:', smsData);
-      console.error('send-otp: Response analysis:', {
-        hasReturn: smsData?.return !== undefined,
-        returnValue: smsData?.return,
-        hasMessage: !!smsData?.message,
-        message: smsData?.message,
-        fullResponse: smsData,
-      });
+      // BREVO returned failure or unexpected response
+      console.error('send-otp: BREVO returned failure or unexpected response:', emailData);
       
-      // Clean up Firebase entry if SMS failed
+      // Clean up Firebase entry if email failed
       if (otpStored) {
         try {
           const db = getDatabase();
           if (db) {
-            await db.ref(`otps/${mobileNumber}`).remove();
-            console.log('send-otp: Cleaned up OTP from Firebase after SMS failure');
+            await db.ref(`otps/${encodedEmail}`).remove();
+            console.log('send-otp: Cleaned up OTP from Firebase after email failure');
           }
         } catch (err) {
           console.error('send-otp: Error cleaning up OTP:', err);
         }
       }
 
-      const errorMessage = smsData?.message || smsData?.error || 'Failed to send OTP via SMS. Please check your Fast2SMS account balance and API key.';
+      const errorMessage = emailData?.message || emailData?.error || 'Failed to send OTP via email. Please check your BREVO account and API key.';
       
       return res.status(400).json({
         success: false,
         error: errorMessage,
         details: {
-          fast2smsResponse: smsData,
-          suggestion: 'Please check: 1) Fast2SMS account has credits, 2) Mobile number format is correct, 3) API key is valid',
+          brevoResponse: emailData,
+          suggestion: 'Please check: 1) BREVO account is active, 2) Email address is valid, 3) API key is valid, 4) Sender email is verified',
         },
       });
     }

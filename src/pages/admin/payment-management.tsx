@@ -71,22 +71,33 @@ export const PaymentManagement: React.FC = () => {
   const pendingWithdrawals = withdrawalPayments.filter((p) => p.status === 'pending');
 
   const handleApproveAddMoney = async (payment: Payment) => {
-    try {
-      await updateDoc(doc(firestore, 'payments', payment.id), {
-        status: 'approved',
-        approved_by: import.meta.env.VITE_ADMIN_EMAIL || 'admin@battlemanager.com',
-        approved_at: new Date(),
-        updated_at: new Date(),
-      });
+    setConfirmDialog({
+      isOpen: true,
+      message: `Are you sure you want to approve this payment of ${payment.amount} points? Points will be credited to the user.`,
+      title: 'Approve Payment',
+      confirmText: 'Approve',
+      cancelText: 'Cancel',
+      confirmVariant: 'success',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await updateDoc(doc(firestore, 'payments', payment.id), {
+            status: 'approved',
+            approved_by: import.meta.env.VITE_ADMIN_EMAIL || 'admin@battlemanager.com',
+            approved_at: new Date(),
+            updated_at: new Date(),
+          });
 
-      // Credit points to user
-      await addPoints(payment.user_mobile, payment.amount);
+          // Credit points to user
+          await addPoints(payment.user_email, payment.amount);
 
-      toast.success('Payment approved and points credited!');
-    } catch (error) {
-      console.error('Error approving payment:', error);
-      toast.error('Failed to approve payment');
-    }
+          toast.success('Payment approved and points credited!');
+        } catch (error) {
+          console.error('Error approving payment:', error);
+          toast.error('Failed to approve payment');
+        }
+      },
+    });
   };
 
   const handleRejectAddMoney = async (payment: Payment) => {
@@ -155,7 +166,7 @@ export const PaymentManagement: React.FC = () => {
         setConfirmDialog(null);
         try {
           // Refund points back to user
-          await addPoints(payment.user_mobile, payment.amount);
+          await addPoints(payment.user_email, payment.amount);
 
           await updateDoc(doc(firestore, 'payments', payment.id), {
             status: 'rejected',
@@ -242,9 +253,15 @@ export const PaymentManagement: React.FC = () => {
                               {payment.amount} points
                             </p>
                             <p className="text-sm text-gray-400">
-                              User: {payment.user_name || 'Unknown'} ({payment.user_mobile})
+                              User: {payment.user_name || 'Unknown'} ({payment.user_email})
                             </p>
-                            <p className="text-xs text-gray-500">
+                            {payment.transaction_id && (
+                              <div className="mt-2 p-2 bg-cyan-900/20 border border-cyan-600/50 rounded-lg">
+                                <p className="text-xs text-cyan-400 mb-1">Manual Payment - Transaction ID:</p>
+                                <p className="text-sm text-cyan-300 font-mono break-all">{payment.transaction_id}</p>
+                              </div>
+                            )}
+                            <p className="text-xs text-gray-500 mt-2">
                               {payment.created_at.toLocaleString()}
                             </p>
                           </div>
@@ -305,7 +322,7 @@ export const PaymentManagement: React.FC = () => {
                               {payment.amount} points
                             </p>
                             <p className="text-sm text-gray-400">
-                              User: {payment.user_name || payment.user_mobile} ({payment.user_mobile})
+                              User: {payment.user_name || payment.user_email} ({payment.user_email})
                             </p>
                             {payment.commission_amount && (
                               <div className="mt-2 space-y-1">

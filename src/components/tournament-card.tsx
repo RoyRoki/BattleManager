@@ -27,53 +27,6 @@ const getEffectiveStatus = (tournament: Tournament): TournamentStatus => {
   return tournament.status;
 };
 
-// Format tournament start time in a user-friendly way
-const formatTournamentStartTime = (date: Date): string => {
-  const now = new Date();
-  const diffMs = date.getTime() - now.getTime();
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  // If tournament is in the past or starting very soon
-  if (diffMs <= 0) {
-    return 'Starting now';
-  }
-
-  // If tournament starts today
-  if (diffDays === 0) {
-    if (diffHours < 1) {
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      return `In ${diffMins} minute${diffMins !== 1 ? 's' : ''}`;
-    }
-    return `Today at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
-  }
-
-  // If tournament starts tomorrow
-  if (diffDays === 1) {
-    return `Tomorrow at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
-  }
-
-  // If tournament starts within a week
-  if (diffDays < 7) {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-  }
-
-  // For dates further out, show full date
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-};
-
 // Format status text in a user-friendly way
 const formatStatusText = (status: TournamentStatus): string => {
   switch (status) {
@@ -115,22 +68,28 @@ export const TournamentCard: React.FC<TournamentCardProps> = ({ tournament, onEn
         >
           <h3 className="text-lg font-heading text-primary mb-3">{tournament.name}</h3>
 
-          <div className="space-y-2 mb-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-400">Entry Fee:</span>
-              <span className="text-white font-body">{tournament.entry_amount} Points</span>
-            </div>
-            {tournament.per_kill_point && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-400">Kill Reward:</span>
-                <span className="text-white font-body">{tournament.per_kill_point} Points</span>
+          {/* Horizontal Three-Column Layout */}
+          <div className="flex items-center border-t border-b border-gray-700 py-4 mb-3">
+            {/* Left Column: Date and Time */}
+            <div className="flex-1 flex flex-col items-center text-center border-r border-gray-700 pr-4">
+              <div className="text-white text-sm font-body space-y-0.5">
+                <div>{new Date(tournament.start_time).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</div>
+                <div>{new Date(tournament.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</div>
               </div>
-            )}
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-400">Starts:</span>
-              <span className="text-white font-body">
-                {formatTournamentStartTime(new Date(tournament.start_time))}
-              </span>
+            </div>
+
+            {/* Middle Column: Entry Fee */}
+            <div className="flex-1 flex flex-col items-center text-center border-r border-gray-700 px-4">
+              <div className="text-white text-sm mb-1">Entry Fee</div>
+              <div className="text-white text-lg font-heading">{tournament.entry_amount} Points</div>
+            </div>
+
+            {/* Right Column: Per Kill Rewards */}
+            <div className="flex-1 flex flex-col items-center text-center pl-4">
+              <div className="text-white text-sm mb-1">Per Kill</div>
+              <div className="text-white text-lg font-heading">
+                {tournament.per_kill_point || 0} Points
+              </div>
             </div>
           </div>
 

@@ -9,6 +9,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppContent } from './components/AppContent';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ROUTES } from './utils/constants';
+import { OfflineBanner } from './shared/components/ui/OfflineBanner';
 
 // Lazy load pages
 const HomePage = lazy(() =>
@@ -101,6 +102,7 @@ function App() {
           <PointsProvider>
             <BrowserRouter>
               <div className="min-h-screen bg-bg">
+                <OfflineBanner />
                 <Suspense fallback={<LoadingFallback />}>
                   <Routes>
                     <Route

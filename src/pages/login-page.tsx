@@ -3,15 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useOTP } from '../hooks/useOTP';
 import { useAuth } from '../contexts/AuthContext';
-import { mobileSchema, userNameSchema, ffIdSchema } from '../utils/validations';
-import { HiPhone, HiKey, HiUser, HiIdentification } from 'react-icons/hi';
+import { emailSchema, userNameSchema, ffIdSchema } from '../utils/validations';
+import { HiMail, HiKey, HiUser, HiIdentification } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [mobileNumber, setMobileNumber] = useState('');
-  const [step, setStep] = useState<'mobile' | 'signup' | 'otp'>('mobile');
+  const [email, setEmail] = useState('');
+  const [step, setStep] = useState<'email' | 'signup' | 'otp'>('email');
   const [enteredOTP, setEnteredOTP] = useState('');
   const [name, setName] = useState('');
   const [ffId, setFfId] = useState('');
@@ -27,17 +27,18 @@ export const LoginPage: React.FC = () => {
     resetOTP,
   } = useOTP();
 
-  const handleMobileSubmit = async (e?: React.FormEvent) => {
+  const handleEmailSubmit = async (e?: React.FormEvent) => {
     if (e) {
       e.preventDefault();
     }
     
-    console.log('handleMobileSubmit called', { mobileNumber, isLoading, step });
+    console.log('handleEmailSubmit called', { email, isLoading, step });
     
-    // Validate mobile number length before proceeding
-    if (mobileNumber.length !== 10) {
-      console.warn('Mobile number validation failed: length is', mobileNumber.length);
-      toast.error('Please enter a valid 10-digit mobile number');
+    // Validate email format before proceeding
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      console.warn('Email validation failed');
+      toast.error('Please enter a valid email address');
       return;
     }
 
@@ -50,14 +51,14 @@ export const LoginPage: React.FC = () => {
     setIsCheckingUser(true);
 
     try {
-      console.log('Validating mobile number with schema');
-      mobileSchema.parse(mobileNumber);
+      console.log('Validating email with schema');
+      emailSchema.parse(email);
       
       console.log('Checking if user exists');
       // Check if user exists - handle errors properly
       let userExists = false;
       try {
-        userExists = await checkUserExists(mobileNumber);
+        userExists = await checkUserExists(email);
         console.log('User exists check completed:', userExists);
       } catch (checkError: any) {
         console.error('Error checking user existence:', checkError);
@@ -88,7 +89,7 @@ export const LoginPage: React.FC = () => {
       console.log('isNewUser set to:', !userExists);
 
       console.log('Sending OTP code');
-      const success = await sendOTPCode(mobileNumber);
+      const success = await sendOTPCode(email);
       console.log('OTP send result:', success);
       
       if (success) {
@@ -101,9 +102,9 @@ export const LoginPage: React.FC = () => {
         toast.error('Failed to send OTP. Please try again.');
       }
     } catch (error: any) {
-      console.error('Error in handleMobileSubmit:', error);
+      console.error('Error in handleEmailSubmit:', error);
       console.error('Error stack:', error.stack);
-      toast.error(error.message || 'Invalid mobile number');
+      toast.error(error.message || 'Invalid email address');
     } finally {
       // Always clear the checking state
       setIsCheckingUser(false);
@@ -113,7 +114,7 @@ export const LoginPage: React.FC = () => {
   const handleSendOTPClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     console.log('Button clicked directly');
-    handleMobileSubmit();
+    handleEmailSubmit();
   };
 
   const handleSignupSubmit = async (e: React.FormEvent) => {
@@ -134,26 +135,26 @@ export const LoginPage: React.FC = () => {
 
   const handleOTPSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('handleOTPSubmit called', { enteredOTP, mobileNumber, isNewUser });
+    console.log('handleOTPSubmit called', { enteredOTP, email, isNewUser });
     
     const signupData = isNewUser
-      ? { name, ff_id: ffId, mobileNumber }
+      ? { name, ff_id: ffId, email }
       : undefined;
 
     try {
-      const success = await verifyOTPCode(enteredOTP, mobileNumber, signupData);
+      const success = await verifyOTPCode(enteredOTP, email, signupData);
       console.log('OTP verification result:', success);
       
       if (success) {
         console.log('OTP verified, logging in user');
-        await login(mobileNumber);
+        await login(email);
         navigate('/');
         // Reset form
-        setMobileNumber('');
+        setEmail('');
         setEnteredOTP('');
         setName('');
         setFfId('');
-        setStep('mobile');
+        setStep('email');
         setIsNewUser(false);
         resetOTP();
       }
@@ -165,11 +166,11 @@ export const LoginPage: React.FC = () => {
 
   const handleBack = () => {
     if (step === 'signup') {
-      setStep('mobile');
+      setStep('email');
       setName('');
       setFfId('');
     } else {
-      setStep('mobile');
+      setStep('email');
       setEnteredOTP('');
       resetOTP();
     }
@@ -177,17 +178,18 @@ export const LoginPage: React.FC = () => {
 
   // Debug: Track button state changes
   useEffect(() => {
-    if (step === 'mobile') {
-      const isButtonDisabled = isLoading || isCheckingUser || mobileNumber.length !== 10;
+    if (step === 'email') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const isButtonDisabled = isLoading || isCheckingUser || !emailRegex.test(email);
       console.log('Send OTP button state:', {
         isLoading,
         isCheckingUser,
-        mobileNumberLength: mobileNumber.length,
+        emailValid: emailRegex.test(email),
         isButtonDisabled,
-        mobileNumber,
+        email,
       });
     }
-  }, [step, isLoading, isCheckingUser, mobileNumber]);
+  }, [step, isLoading, isCheckingUser, email]);
 
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center p-4">
@@ -215,39 +217,38 @@ export const LoginPage: React.FC = () => {
               BattleManager
             </h1>
             <p className="text-gray-400">
-              {step === 'mobile'
-                ? 'Enter your mobile number to get started'
+              {step === 'email'
+                ? 'Enter your email address to get started'
                 : step === 'signup'
                 ? 'Create your account'
-                : 'Enter the OTP sent to your mobile'}
+                : 'Enter the OTP sent to your email'}
             </p>
           </div>
 
-          {/* Mobile Number Form */}
-          {step === 'mobile' && (
+          {/* Email Form */}
+          {step === 'email' && (
             <form 
               onSubmit={(e) => {
                 console.log('Form onSubmit triggered');
-                handleMobileSubmit(e);
+                handleEmailSubmit(e);
               }} 
               className="space-y-6"
               noValidate
             >
               <div>
                 <label className="block text-sm font-body text-gray-300 mb-2">
-                  Mobile Number
+                  Email Address
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <HiPhone className="text-gray-400" />
+                    <HiMail className="text-gray-400" />
                   </div>
                   <input
-                    type="tel"
-                    value={mobileNumber}
-                    onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ''))}
-                    placeholder="10-digit mobile number"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value.trim())}
+                    placeholder="your@email.com"
                     className="w-full bg-bg border border-gray-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-primary transition font-body"
-                    maxLength={10}
                     required
                   />
                 </div>
@@ -256,7 +257,7 @@ export const LoginPage: React.FC = () => {
               <button
                 type="submit"
                 onClick={handleSendOTPClick}
-                disabled={isLoading || isCheckingUser || mobileNumber.length !== 10}
+                disabled={isLoading || isCheckingUser || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)}
                 className="w-full bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 aria-label="Send OTP"
               >
@@ -321,7 +322,7 @@ export const LoginPage: React.FC = () => {
 
               <div className="bg-bg-tertiary border border-primary border-opacity-30 rounded-lg p-3">
                 <p className="text-xs text-gray-400">
-                  Mobile: <span className="text-primary">{mobileNumber}</span>
+                  Email: <span className="text-primary">{email}</span>
                 </p>
               </div>
 
@@ -372,7 +373,7 @@ export const LoginPage: React.FC = () => {
                   </p>
                 )}
                 <p className="text-xs text-gray-500 mt-2">
-                  OTP sent to: <span className="text-primary">{mobileNumber}</span>
+                  OTP sent to: <span className="text-primary">{email}</span>
                 </p>
               </div>
 

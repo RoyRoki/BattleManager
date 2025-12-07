@@ -24,12 +24,19 @@ export const useFirestoreTransaction = () => {
   };
 
   const deductPoints = async (
-    userMobile: string,
+    userEmail: string,
     amount: number
   ): Promise<boolean> => {
+    if (!userEmail) {
+      throw new Error('User email is required');
+    }
+    
+    // Normalize email (lowercase, trim) for Firestore lookup
+    const normalizedEmail = userEmail.toLowerCase().trim();
+    
     return (
       (await executeTransaction(async (transaction) => {
-        const userRef = doc(firestore, 'users', userMobile);
+        const userRef = doc(firestore, 'users', normalizedEmail);
         const userDoc = await transaction.get(userRef);
 
         if (!userDoc.exists()) {
@@ -52,12 +59,19 @@ export const useFirestoreTransaction = () => {
   };
 
   const addPoints = async (
-    userMobile: string,
+    userEmail: string,
     amount: number
   ): Promise<boolean> => {
+    if (!userEmail) {
+      throw new Error('User email is required');
+    }
+    
+    // Normalize email (lowercase, trim) for Firestore lookup
+    const normalizedEmail = userEmail.toLowerCase().trim();
+    
     return (
       (await executeTransaction(async (transaction) => {
-        const userRef = doc(firestore, 'users', userMobile);
+        const userRef = doc(firestore, 'users', normalizedEmail);
         const userDoc = await transaction.get(userRef);
 
         if (!userDoc.exists()) {

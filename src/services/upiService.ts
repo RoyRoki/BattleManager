@@ -1,20 +1,20 @@
-// Merchant UPI details
-const MERCHANT_UPI_ID = '9800881300@upi';
-const MERCHANT_NAME = 'RokiRoy';
-
 /**
  * Generate UPI payment string for adding money
+ * @param upiId - UPI ID (e.g., 9800881300@upi)
+ * @param upiName - Merchant/UPI name (e.g., RokiRoy)
  * @param amount - Amount to pay
  * @param transactionNote - Transaction note
  * @returns UPI payment string
  */
 export const generateAddMoneyUPIString = (
+  upiId: string,
+  upiName: string,
   amount: number,
   transactionNote: string = 'Add Money to BattleManager'
 ): string => {
   const params = new URLSearchParams({
-    pa: MERCHANT_UPI_ID,
-    pn: MERCHANT_NAME,
+    pa: upiId,
+    pn: upiName,
     am: amount.toString(),
     cu: 'INR',
     tn: transactionNote,
@@ -96,19 +96,23 @@ export const PAYMENT_APPS: PaymentApp[] = [
 /**
  * Generate payment app intent URL
  * @param app - Payment app configuration
+ * @param upiId - UPI ID (e.g., 9800881300@upi)
+ * @param upiName - Merchant/UPI name (e.g., RokiRoy)
  * @param amount - Amount to pay
  * @param transactionNote - Transaction note
  * @returns Intent URL for the payment app
  */
 export const generatePaymentAppIntent = (
   app: PaymentApp,
+  upiId: string,
+  upiName: string,
   amount: number,
   transactionNote: string = 'Add Money to BattleManager'
 ): string => {
   // Build query parameters
   const queryParams = new URLSearchParams({
-    pa: MERCHANT_UPI_ID,
-    pn: MERCHANT_NAME,
+    pa: upiId,
+    pn: upiName,
     am: amount.toString(),
     cu: 'INR',
     tn: transactionNote,

@@ -1,9 +1,9 @@
 export interface OTPRequest {
-  mobileNumber: string;
+  email: string;
 }
 
 export interface OTPVerificationRequest {
-  mobileNumber: string;
+  email: string;
   otp: string;
 }
 

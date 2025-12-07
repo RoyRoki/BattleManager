@@ -1,13 +1,13 @@
 import { User, SignupData } from '../../domain/entities/User';
 
 export interface IUserDataSource {
-  checkUserExists(mobileNumber: string): Promise<boolean>;
+  checkUserExists(email: string): Promise<boolean>;
   createUser(signupData: SignupData): Promise<User>;
-  getUserByMobile(mobileNumber: string): Promise<User | null>;
+  getUserByEmail(email: string): Promise<User | null>;
 }
 
 export class UserDataSource implements IUserDataSource {
-  async checkUserExists(_mobileNumber: string): Promise<boolean> {
+  async checkUserExists(_email: string): Promise<boolean> {
     // Implementation would go here
     return false;
   }
@@ -17,7 +17,7 @@ export class UserDataSource implements IUserDataSource {
     throw new Error('Not implemented');
   }
 
-  async getUserByMobile(_mobileNumber: string): Promise<User | null> {
+  async getUserByEmail(_email: string): Promise<User | null> {
     // Implementation would go here
     return null;
   }

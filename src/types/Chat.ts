@@ -1,6 +1,6 @@
 export interface ChatMessage {
   id: string;
-  user_mobile: string;
+  user_email: string;
   user_name?: string;
   message: string;
   timestamp: Date;
@@ -12,7 +12,7 @@ export interface ChatMessage {
 }
 
 export interface SupportChat {
-  user_mobile: string;
+  user_email: string;
   user_name?: string;
   last_message?: string;
   last_message_time?: Date;

@@ -109,13 +109,13 @@ export const ChatInterface: React.FC = () => {
     if (messages.length > previousMessagesLengthRef.current) {
       const newMessages = messages.slice(previousMessagesLengthRef.current);
       const hasReceivedMessage = newMessages.some(
-        (msg) => msg.user_mobile !== user?.mobile_no
+        (msg) => msg.user_email !== user?.email
       );
       if (hasReceivedMessage) {
         playMessageReceived();
       }
     }
-  }, [messages.length, user?.mobile_no]);
+  }, [messages.length, user?.email]);
 
   // Initial scroll to bottom on mount
   useEffect(() => {
@@ -208,7 +208,7 @@ export const ChatInterface: React.FC = () => {
 
               {/* Messages in Group */}
               {group.messages.map((msg) => {
-                const isOwnMessage = msg.user_mobile === user?.mobile_no;
+                const isOwnMessage = msg.user_email === user?.email;
                 const showAvatar = !isOwnMessage;
                 const isAdmin = msg.is_admin;
 
@@ -226,7 +226,7 @@ export const ChatInterface: React.FC = () => {
                     {/* Avatar (only for other users) */}
                     {showAvatar && (
                       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-bg font-heading text-xs font-bold border-2 border-gray-800">
-                        {msg.user_name?.[0]?.toUpperCase() || msg.user_mobile[0]}
+                        {msg.user_name?.[0]?.toUpperCase() || msg.user_email[0]}
                       </div>
                     )}
 
@@ -236,7 +236,7 @@ export const ChatInterface: React.FC = () => {
                       {!isOwnMessage && (
                         <div className="text-xs text-gray-400 mb-1 px-2 flex items-center gap-1">
                           <span className="font-body">
-                            {msg.user_name || msg.user_mobile}
+                            {msg.user_name || msg.user_email}
                           </span>
                           {isAdmin && (
                             <span className="text-accent text-[10px] font-heading bg-accent/20 px-1.5 py-0.5 rounded">

@@ -11,8 +11,8 @@ export const ProfilePage: React.FC = () => {
   const { points } = usePoints();
   const [showOTPModal, setShowOTPModal] = useState(false);
 
-  const handleLogin = (mobileNo: string) => {
-    toast.success(`Logged in as ${mobileNo}`);
+  const handleLogin = (email: string) => {
+    toast.success(`Logged in as ${email}`);
     setShowOTPModal(false);
   };
 
@@ -49,7 +49,7 @@ export const ProfilePage: React.FC = () => {
             {user.avatar_url ? (
               <img
                 src={user.avatar_url}
-                alt={user.name || user.mobile_no}
+                alt={user.name || user.email}
                 className="w-20 h-20 rounded-full border-2 border-primary"
               />
             ) : (
@@ -61,7 +61,7 @@ export const ProfilePage: React.FC = () => {
               <h2 className="text-2xl font-heading text-primary">
                 {user.name || 'User'}
               </h2>
-              <p className="text-gray-400">{user.mobile_no}</p>
+              <p className="text-gray-400">{user.email}</p>
               {isAdmin && (
                 <span className="text-xs bg-accent text-white px-2 py-1 rounded mt-1 inline-block">
                   ADMIN
@@ -99,8 +99,8 @@ export const ProfilePage: React.FC = () => {
           <h3 className="text-xl font-heading text-primary mb-4">Account Information</h3>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-400">Mobile Number:</span>
-              <span className="text-white">{user.mobile_no}</span>
+              <span className="text-gray-400">Email Address:</span>
+              <span className="text-white">{user.email}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Member Since:</span>

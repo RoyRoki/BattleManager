@@ -43,6 +43,10 @@ coverage
 sw.js
 workbox-*.js
 
+# Capacitor
+android/
+ios/
+.capacitor/
 
 .vercel
 .env*.local

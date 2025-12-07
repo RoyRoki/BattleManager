@@ -4,11 +4,12 @@ import { database } from '../services/firebaseService';
 import { ChatMessage, SupportChat } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { uploadImage } from '../services/cloudinaryService';
+import { sanitizeEmailForPath, desanitizeEmailFromPath } from '../utils/firebasePathUtils';
 
 const MESSAGES_PER_PAGE = 50;
 
 interface UseSupportChatOptions {
-  targetUserMobile?: string; // For admin: specify which user's chat to view
+  targetUserEmail?: string; // For admin: specify which user's chat to view
 }
 
 export const useSupportChat = (options?: UseSupportChatOptions) => {
@@ -20,14 +21,15 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
   const [isLoadingChats, setIsLoadingChats] = useState(false);
 
   // Determine which user's chat to view
-  const targetMobile = options?.targetUserMobile || user?.mobile_no;
+  const targetEmail = options?.targetUserEmail || user?.email;
 
   // Mark messages as read when admin views a chat
-  const markMessagesAsRead = useCallback(async (userMobile: string) => {
-    if (!database || !isAdmin || !userMobile) return;
+  const markMessagesAsRead = useCallback(async (userEmail: string) => {
+    if (!database || !isAdmin || !userEmail) return;
 
     try {
-      const metaRef = ref(database, `support_chats/${userMobile}/meta`);
+      const sanitizedEmail = sanitizeEmailForPath(userEmail);
+      const metaRef = ref(database, `support_chats/${sanitizedEmail}/meta`);
       await update(metaRef, {
         last_read_by_admin: serverTimestamp(),
       });
@@ -44,34 +46,50 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
       return;
     }
 
-    if (!targetMobile) {
+    if (!targetEmail) {
       setIsLoading(false);
       return;
     }
 
-    const chatPath = `support_chats/${targetMobile}/messages`;
+    const sanitizedEmail = sanitizeEmailForPath(targetEmail);
+    const chatPath = `support_chats/${sanitizedEmail}/messages`;
     const messagesRef = ref(database, chatPath);
     const messagesQuery = query(messagesRef, orderByChild('timestamp'), limitToLast(MESSAGES_PER_PAGE));
 
     const unsubscribe = onValue(
       messagesQuery,
       (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.val();
-          const messageList: ChatMessage[] = Object.keys(data)
-            .map((key) => ({
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        const messageList: ChatMessage[] = Object.keys(data)
+          .map((key) => {
+            const msg = data[key];
+            // Convert timestamp to Date
+            let timestamp: Date;
+            if (msg.timestamp) {
+              if (typeof msg.timestamp === 'number') {
+                timestamp = new Date(msg.timestamp > 1e12 ? msg.timestamp : msg.timestamp * 1000);
+              } else if (typeof msg.timestamp === 'string') {
+                timestamp = new Date(Number(msg.timestamp) || Date.now());
+              } else {
+                timestamp = new Date();
+              }
+            } else {
+              timestamp = new Date();
+            }
+            
+            return {
               id: key,
-              ...data[key],
-              timestamp: data[key].timestamp
-                ? new Date(data[key].timestamp)
-                : new Date(),
-              message_type: data[key].message_type || 'text',
-            }))
-            .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-          setMessages(messageList);
-        } else {
-          setMessages([]);
-        }
+              ...msg,
+              timestamp,
+              message_type: msg.message_type || 'text',
+            };
+          })
+          .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+        setMessages(messageList);
+      } else {
+        setMessages([]);
+      }
         setIsLoading(false);
       },
       (error: any) => {
@@ -86,15 +104,15 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
     );
 
     // Mark messages as read when admin views the chat
-    if (isAdmin && targetMobile) {
-      markMessagesAsRead(targetMobile);
+    if (isAdmin && targetEmail) {
+      markMessagesAsRead(targetEmail);
     }
 
     return () => {
       off(messagesRef);
       unsubscribe();
     };
-  }, [targetMobile, isAdmin, markMessagesAsRead]);
+  }, [targetEmail, isAdmin, markMessagesAsRead]);
 
   // Admin: Load all support chats list
   const loadSupportChats = useCallback(async () => {
@@ -109,8 +127,10 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
         const data = snapshot.val();
         const chatList: SupportChat[] = [];
 
-        for (const userMobile of Object.keys(data)) {
-          const chatData = data[userMobile];
+        for (const sanitizedEmail of Object.keys(data)) {
+          const chatData = data[sanitizedEmail];
+          // Desanitize the email to get the original email address
+          const userEmail = desanitizeEmailFromPath(sanitizedEmail);
           const messages = chatData.messages || {};
           const messageKeys = Object.keys(messages);
 
@@ -125,7 +145,7 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
             
             // Find the user's name from the first non-admin message
             const firstUserMessage = sortedMessages.find(msg => !msg.is_admin);
-            const userName = firstUserMessage?.user_name || userMobile;
+            const userName = firstUserMessage?.user_name || userEmail;
             
             // Count unread messages (messages from user after last admin read timestamp)
             let unreadCount = 0;
@@ -187,7 +207,7 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
             }
 
             chatList.push({
-              user_mobile: userMobile,
+              user_email: userEmail,
               user_name: userName,
               last_message: lastMessage.message_type === 'image' ? '📷 Image' : lastMessage.message,
               last_message_time: lastMessage.timestamp ? new Date(lastMessage.timestamp) : undefined,
@@ -233,7 +253,7 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
   }, [isAdmin, loadSupportChats]);
 
   // Send text message
-  const sendMessage = async (message: string, targetUserMobile?: string): Promise<boolean> => {
+  const sendMessage = async (message: string, targetUserEmail?: string): Promise<boolean> => {
     // Allow admin to send even without user object
     if ((!user && !isAdmin) || !message.trim() || !database) {
       if (!database) {
@@ -243,22 +263,23 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
     }
 
     try {
-      // If admin is replying, use target user's mobile, otherwise use current user's mobile
-      const chatMobile = isAdmin && targetUserMobile
-        ? targetUserMobile
-        : targetMobile;
+      // If admin is replying, use target user's email, otherwise use current user's email
+      const chatEmail = isAdmin && targetUserEmail
+        ? targetUserEmail
+        : targetEmail;
       
-      if (!chatMobile) {
-        console.error('No chat mobile specified');
+      if (!chatEmail) {
+        console.error('No chat email specified');
         return false;
       }
 
-      const chatPath = `support_chats/${chatMobile}/messages`;
+      const sanitizedEmail = sanitizeEmailForPath(chatEmail);
+      const chatPath = `support_chats/${sanitizedEmail}/messages`;
       const messagesRef = ref(database, chatPath);
       
       await push(messagesRef, {
-        user_mobile: isAdmin ? 'admin' : (user?.mobile_no || ''),
-        user_name: isAdmin ? 'Admin' : (user?.name || user?.mobile_no || 'User'),
+        user_email: isAdmin ? 'admin' : (user?.email || ''),
+        user_name: isAdmin ? 'Admin' : (user?.name || user?.email || 'User'),
         message: message.trim(),
         timestamp: serverTimestamp(),
         is_admin: isAdmin || false,
@@ -266,7 +287,7 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
       });
 
       // Update chat metadata
-      const metaRef = ref(database, `support_chats/${chatMobile}/meta`);
+      const metaRef = ref(database, `support_chats/${sanitizedEmail}/meta`);
       const metaUpdate: any = {
         last_message: message.trim().substring(0, 100),
         last_message_time: serverTimestamp(),
@@ -288,7 +309,7 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
   };
 
   // Send image message
-  const sendImageMessage = async (file: File, targetUserMobile?: string): Promise<boolean> => {
+  const sendImageMessage = async (file: File, targetUserEmail?: string): Promise<boolean> => {
     // Allow admin to send even without user object
     if ((!user && !isAdmin) || !database) {
       if (!database) {
@@ -303,22 +324,23 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
       const imageUrl = await uploadImage(file, 'support_chat');
 
       // Determine target chat
-      const chatMobile = isAdmin && targetUserMobile
-        ? targetUserMobile
-        : targetMobile;
+      const chatEmail = isAdmin && targetUserEmail
+        ? targetUserEmail
+        : targetEmail;
       
-      if (!chatMobile) {
-        console.error('No chat mobile specified');
+      if (!chatEmail) {
+        console.error('No chat email specified');
         setIsUploading(false);
         return false;
       }
 
-      const chatPath = `support_chats/${chatMobile}/messages`;
+      const sanitizedEmail = sanitizeEmailForPath(chatEmail);
+      const chatPath = `support_chats/${sanitizedEmail}/messages`;
       const messagesRef = ref(database, chatPath);
       
       await push(messagesRef, {
-        user_mobile: isAdmin ? 'admin' : (user?.mobile_no || ''),
-        user_name: isAdmin ? 'Admin' : (user?.name || user?.mobile_no || 'User'),
+        user_email: isAdmin ? 'admin' : (user?.email || ''),
+        user_name: isAdmin ? 'Admin' : (user?.name || user?.email || 'User'),
         message: '',
         image_url: imageUrl,
         timestamp: serverTimestamp(),
@@ -327,7 +349,7 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
       });
 
       // Update chat metadata
-      const metaRef = ref(database, `support_chats/${chatMobile}/meta`);
+      const metaRef = ref(database, `support_chats/${sanitizedEmail}/meta`);
       const metaUpdate: any = {
         last_message: '📷 Image',
         last_message_time: serverTimestamp(),

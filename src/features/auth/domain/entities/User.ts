@@ -1,5 +1,5 @@
 export interface User {
-  mobile_no: string;
+  email: string;
   name?: string;
   avatar_url?: string;
   points: number;
@@ -13,6 +13,6 @@ export interface User {
 export interface SignupData {
   name: string;
   ff_id: string;
-  mobileNumber: string;
+  email: string;
   password?: string;
 }

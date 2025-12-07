@@ -12,7 +12,7 @@ export interface TournamentPayment {
   total_paid: number; // Total points paid out
   paid_at: Date; // When payment was made
   paid_by: string; // Admin email who made the payment
-  custom_credits?: Record<string, number>; // mobile_no -> custom points
+  custom_credits?: Record<string, number>; // email -> custom points
 }
 
 export interface Tournament {
@@ -28,7 +28,7 @@ export interface Tournament {
   encrypted_credentials?: string; // Legacy field - kept for backward compatibility
   ff_id_encrypted?: string;
   ff_password_encrypted?: string;
-  player_kills?: Record<string, PlayerKill>; // mobile_no -> PlayerKill
+  player_kills?: Record<string, PlayerKill>; // email -> PlayerKill
   payment_info?: TournamentPayment; // Payment tracking
   created_at: Date;
   updated_at: Date;
@@ -37,7 +37,7 @@ export interface Tournament {
 
 export interface TournamentEnrollment {
   tournament_id: string;
-  user_mobile: string;
+  user_email: string;
   enrolled_at: Date;
   points_deducted: number;
 }

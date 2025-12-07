@@ -1,12 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useLoginViewModel } from '../viewmodels/useLoginViewModel';
-import { HiPhone, HiKey, HiUser, HiIdentification, HiLockClosed } from 'react-icons/hi';
+import { HiMail, HiKey, HiUser, HiIdentification, HiLockClosed } from 'react-icons/hi';
 
 export const LoginPage: React.FC = () => {
   const {
     // State
-    mobileNumber,
+    email,
     step,
     enteredOTP,
     name,
@@ -23,7 +23,7 @@ export const LoginPage: React.FC = () => {
     flowType,
 
     // Actions
-    setMobileNumber,
+    setEmail,
     setEnteredOTP,
     setName,
     setFfId,
@@ -31,7 +31,7 @@ export const LoginPage: React.FC = () => {
     setConfirmPassword,
     setNewPassword,
     setConfirmNewPassword,
-    handleMobileSubmit,
+    handleEmailSubmit,
     handlePasswordLogin,
     handleSignupSubmit,
     handleOTPSubmit,
@@ -42,8 +42,8 @@ export const LoginPage: React.FC = () => {
 
   const getStepTitle = () => {
     switch (step) {
-      case 'mobile':
-        return 'Enter your mobile number to get started';
+      case 'email':
+        return 'Enter your email address to get started';
       case 'login':
         return 'Enter your password to login';
       case 'signup':
@@ -51,7 +51,7 @@ export const LoginPage: React.FC = () => {
       case 'otp':
         return flowType === 'forgot_password'
           ? 'Verify OTP to reset password'
-          : 'Enter the OTP sent to your mobile';
+          : 'Enter the OTP sent to your email';
       case 'reset_password':
         return 'Set your new password';
       default:
@@ -87,24 +87,23 @@ export const LoginPage: React.FC = () => {
             <p className="text-gray-400">{getStepTitle()}</p>
           </div>
 
-          {/* Mobile Number Form */}
-          {step === 'mobile' && (
-            <form onSubmit={handleMobileSubmit} className="space-y-6" noValidate>
+          {/* Email Form */}
+          {step === 'email' && (
+            <form onSubmit={handleEmailSubmit} className="space-y-6" noValidate>
               <div>
                 <label className="block text-sm font-body text-gray-300 mb-2">
-                  Mobile Number
+                  Email Address
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <HiPhone className="text-gray-400" />
+                    <HiMail className="text-gray-400" />
                   </div>
                   <input
-                    type="tel"
-                    value={mobileNumber}
-                    onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ''))}
-                    placeholder="10-digit mobile number"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value.trim())}
+                    placeholder="your@email.com"
                     className="w-full bg-bg border border-gray-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-primary transition font-body"
-                    maxLength={10}
                     required
                   />
                 </div>
@@ -112,7 +111,7 @@ export const LoginPage: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={isLoading || isCheckingUser || mobileNumber.length !== 10}
+                disabled={isLoading || isCheckingUser || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)}
                 className="w-full bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 aria-label="Continue"
               >
@@ -156,7 +155,7 @@ export const LoginPage: React.FC = () => {
 
               <div className="bg-bg-tertiary border border-primary border-opacity-30 rounded-lg p-3">
                 <p className="text-xs text-gray-400">
-                  Mobile: <span className="text-primary">{mobileNumber}</span>
+                  Email: <span className="text-primary">{email}</span>
                 </p>
               </div>
 
@@ -280,7 +279,7 @@ export const LoginPage: React.FC = () => {
 
               <div className="bg-bg-tertiary border border-primary border-opacity-30 rounded-lg p-3">
                 <p className="text-xs text-gray-400">
-                  Mobile: <span className="text-primary">{mobileNumber}</span>
+                  Email: <span className="text-primary">{email}</span>
                 </p>
               </div>
 
@@ -331,7 +330,7 @@ export const LoginPage: React.FC = () => {
                   </p>
                 )}
                 <p className="text-xs text-gray-500 mt-2">
-                  OTP sent to: <span className="text-primary">{mobileNumber}</span>
+                  OTP sent to: <span className="text-primary">{email}</span>
                 </p>
               </div>
 
@@ -405,7 +404,7 @@ export const LoginPage: React.FC = () => {
 
               <div className="bg-bg-tertiary border border-primary border-opacity-30 rounded-lg p-3">
                 <p className="text-xs text-gray-400">
-                  Mobile: <span className="text-primary">{mobileNumber}</span>
+                  Email: <span className="text-primary">{email}</span>
                 </p>
               </div>
 

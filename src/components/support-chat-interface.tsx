@@ -15,18 +15,18 @@ interface MessageGroup {
 }
 
 interface SupportChatInterfaceProps {
-  targetUserMobile?: string; // For admin: specify which user's chat to view
+  targetUserEmail?: string; // For admin: specify which user's chat to view
   onBack?: () => void; // For admin: callback to go back to chat list
   showHeader?: boolean;
 }
 
 export const SupportChatInterface: React.FC<SupportChatInterfaceProps> = ({
-  targetUserMobile,
+  targetUserEmail,
   onBack,
   showHeader = true,
 }) => {
   const { messages, isLoading, isUploading, sendMessage, sendImageMessage } = useSupportChat({
-    targetUserMobile,
+    targetUserEmail,
   });
   const { user, isAdmin } = useAuth();
   const [message, setMessage] = useState('');
@@ -118,7 +118,7 @@ export const SupportChatInterface: React.FC<SupportChatInterfaceProps> = ({
 
     // Send image if selected
     if (selectedImage) {
-      const success = await sendImageMessage(selectedImage, targetUserMobile);
+      const success = await sendImageMessage(selectedImage, targetUserEmail);
       if (success) {
         clearSelectedImage();
         setTimeout(() => scrollToBottom(true), 100);
@@ -133,7 +133,7 @@ export const SupportChatInterface: React.FC<SupportChatInterfaceProps> = ({
 
     try {
       chatMessageSchema.parse(message);
-      const success = await sendMessage(message, targetUserMobile);
+      const success = await sendMessage(message, targetUserEmail);
       if (success) {
         setMessage('');
         setTimeout(() => scrollToBottom(true), 100);
@@ -156,7 +156,7 @@ export const SupportChatInterface: React.FC<SupportChatInterfaceProps> = ({
     );
   }
 
-  const currentUserMobile = user?.mobile_no || (isAdmin ? 'admin' : '');
+  const currentUserEmail = user?.email || (isAdmin ? 'admin' : '');
 
   return (
     <div className="flex flex-col h-full">
@@ -176,9 +176,9 @@ export const SupportChatInterface: React.FC<SupportChatInterfaceProps> = ({
             )}
             <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
             <div className="flex-1">
-              {isAdmin && targetUserMobile ? (
+              {isAdmin && targetUserEmail ? (
                 <p className="text-sm text-gray-400">
-                  Chat with <span className="text-primary font-heading">{targetUserMobile}</span>
+                  Chat with <span className="text-primary font-heading">{targetUserEmail}</span>
                 </p>
               ) : (
                 <p className="text-sm text-gray-400">
@@ -225,11 +225,21 @@ export const SupportChatInterface: React.FC<SupportChatInterfaceProps> = ({
 
                 {/* Messages in Group */}
                 {group.messages.map((msg) => {
-                  const isOwnMessage = msg.user_mobile === currentUserMobile || 
-                    (isAdmin && msg.is_admin) || 
-                    (!isAdmin && msg.user_mobile === user?.mobile_no);
-                  const showAvatar = !isOwnMessage;
                   const isMsgFromAdmin = msg.is_admin;
+                  
+                  // Determine if message is from current user
+                  // For regular users: admin messages are never "own messages"
+                  // For admins: only their own admin messages are "own messages"
+                  let isOwnMessage = false;
+                  if (isAdmin) {
+                    // Admin viewing: admin messages are "own messages"
+                    isOwnMessage = isMsgFromAdmin;
+                  } else {
+                    // Regular user: only their own messages (not admin) are "own messages"
+                    isOwnMessage = !isMsgFromAdmin && msg.user_email === currentUserEmail;
+                  }
+                  
+                  const showAvatar = !isOwnMessage;
 
                   return (
                     <motion.div
@@ -247,7 +257,7 @@ export const SupportChatInterface: React.FC<SupportChatInterfaceProps> = ({
                             ? 'bg-accent text-white border-2 border-accent/50' 
                             : 'bg-gradient-to-br from-primary to-primary/70 text-bg border-2 border-gray-800'
                         }`}>
-                          {isMsgFromAdmin ? 'A' : (msg.user_name?.[0]?.toUpperCase() || msg.user_mobile[0])}
+                          {isMsgFromAdmin ? 'A' : (msg.user_name?.[0]?.toUpperCase() || msg.user_email[0])}
                         </div>
                       )}
 
@@ -257,7 +267,7 @@ export const SupportChatInterface: React.FC<SupportChatInterfaceProps> = ({
                         {!isOwnMessage && (
                           <div className="text-xs text-gray-400 mb-1 px-2 flex items-center gap-1">
                             <span className="font-body">
-                              {isMsgFromAdmin ? 'Admin' : (msg.user_name || msg.user_mobile)}
+                              {isMsgFromAdmin ? 'Admin' : (msg.user_name || msg.user_email)}
                             </span>
                             {isMsgFromAdmin && (
                               <span className="text-accent text-[10px] font-heading bg-accent/20 px-1.5 py-0.5 rounded">
@@ -404,7 +414,7 @@ export const SupportChatInterface: React.FC<SupportChatInterfaceProps> = ({
               </>
             ) : (
               <>
-                <HiPaperAirplane className="text-lg" />
+                <HiPaperAirplane className="text-xl rotate-[-45deg]" />
                 <span>Send</span>
               </>
             )}

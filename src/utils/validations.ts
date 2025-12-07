@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
-// Mobile number validation (10 digits)
+// Email validation
+export const emailSchema = z
+  .string()
+  .email('Invalid email address')
+  .toLowerCase()
+  .trim();
+
+// Mobile number validation (10 digits) - deprecated, kept for backward compatibility
 export const mobileSchema = z
   .string()
   .regex(/^[6-9]\d{9}$/, 'Invalid mobile number. Must be 10 digits starting with 6-9.');

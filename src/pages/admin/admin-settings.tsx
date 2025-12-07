@@ -137,6 +137,181 @@ const CommissionSettings: React.FC = () => {
   );
 };
 
+const UPISettings: React.FC = () => {
+  const { upiId, upiName, loading, updateUPISettings } = useAppSettings();
+  const [upiIdValue, setUpiIdValue] = useState<string>('');
+  const [upiNameValue, setUpiNameValue] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  React.useEffect(() => {
+    setUpiIdValue(upiId || '');
+    setUpiNameValue(upiName || '');
+  }, [upiId, upiName]);
+
+  const handleSave = async () => {
+    if (!upiIdValue.trim()) {
+      toast.error('UPI ID is required');
+      return;
+    }
+    if (!upiNameValue.trim()) {
+      toast.error('UPI Name is required');
+      return;
+    }
+
+    setIsSaving(true);
+    const success = await updateUPISettings(upiIdValue.trim(), upiNameValue.trim());
+    setIsSaving(false);
+    if (success) {
+      setUpiIdValue(upiIdValue.trim());
+      setUpiNameValue(upiNameValue.trim());
+    }
+  };
+
+  if (loading) {
+    return <div className="text-gray-400">Loading settings...</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          UPI ID
+        </label>
+        <input
+          type="text"
+          value={upiIdValue}
+          onChange={(e) => setUpiIdValue(e.target.value)}
+          placeholder="e.g., 9800881300@upi"
+          className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary"
+        />
+        <p className="text-xs text-gray-500 mt-2">
+          Enter your UPI ID (e.g., phone@upi, name@paytm)
+        </p>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          UPI Name / Merchant Name
+        </label>
+        <input
+          type="text"
+          value={upiNameValue}
+          onChange={(e) => setUpiNameValue(e.target.value)}
+          placeholder="e.g., RokiRoy"
+          className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary"
+        />
+        <p className="text-xs text-gray-500 mt-2">
+          Enter the merchant name that appears in UPI payments
+        </p>
+      </div>
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={handleSave}
+        disabled={isSaving || (upiIdValue === upiId && upiNameValue === upiName)}
+        className="w-full bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-80 transition disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isSaving ? 'Saving...' : 'Save UPI Settings'}
+      </motion.button>
+      {(!upiId || !upiName) && (
+        <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3">
+          <p className="text-xs text-yellow-300">
+            ⚠️ UPI settings are not configured. Payment feature will be disabled until UPI ID and Name are set.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const APKDownloadSettings: React.FC = () => {
+  const { apkDownloadUrl, loading, updateAPKDownloadUrl } = useAppSettings();
+  const [urlValue, setUrlValue] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  React.useEffect(() => {
+    setUrlValue(apkDownloadUrl || '');
+  }, [apkDownloadUrl]);
+
+  const handleSave = async () => {
+    if (!urlValue.trim()) {
+      toast.error('APK Download URL is required');
+      return;
+    }
+
+    setIsSaving(true);
+    const success = await updateAPKDownloadUrl(urlValue.trim());
+    setIsSaving(false);
+    if (success) {
+      setUrlValue(urlValue.trim());
+    }
+  };
+
+  const handleTest = () => {
+    if (urlValue.trim()) {
+      window.open(urlValue.trim(), '_blank', 'noopener,noreferrer');
+    } else {
+      toast.error('Please enter a URL first');
+    }
+  };
+
+  if (loading) {
+    return <div className="text-gray-400">Loading settings...</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          APK Download URL
+        </label>
+        <div className="flex gap-3">
+          <input
+            type="url"
+            value={urlValue}
+            onChange={(e) => setUrlValue(e.target.value)}
+            placeholder="https://drive.google.com/uc?export=download&id=..."
+            className="flex-1 bg-bg border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary"
+          />
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleTest}
+            disabled={!urlValue.trim()}
+            className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Test URL"
+          >
+            Test
+          </motion.button>
+        </div>
+        <p className="text-xs text-gray-500 mt-2">
+          Enter the direct download URL for the Android APK file. This URL will be used in the download button in the app header.
+        </p>
+        {apkDownloadUrl && (
+          <p className="text-xs text-primary mt-2">
+            Current URL: {apkDownloadUrl}
+          </p>
+        )}
+      </div>
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={handleSave}
+        disabled={isSaving || urlValue === apkDownloadUrl}
+        className="w-full bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-80 transition disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isSaving ? 'Saving...' : 'Save APK Download URL'}
+      </motion.button>
+      {!apkDownloadUrl && (
+        <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3">
+          <p className="text-xs text-yellow-300">
+            ⚠️ APK Download URL is not configured. The download button will use a default URL.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const AdminSettings: React.FC = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -187,9 +362,25 @@ export const AdminSettings: React.FC = () => {
           </SettingsSection>
 
           <SettingsSection
+            title="UPI Payment Settings"
+            description="Configure UPI ID and merchant name for payments"
+            delay={0.25}
+          >
+            <UPISettings />
+          </SettingsSection>
+
+          <SettingsSection
+            title="APK Download Settings"
+            description="Configure the Android APK download URL"
+            delay={0.3}
+          >
+            <APKDownloadSettings />
+          </SettingsSection>
+
+          <SettingsSection
             title="Account"
             description="Manage your admin account"
-            delay={0.3}
+            delay={0.35}
           >
             <div className="space-y-4">
               <div className="bg-bg border border-accent border-opacity-30 rounded-lg p-4">

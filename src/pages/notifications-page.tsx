@@ -16,7 +16,7 @@ export const NotificationsPage: React.FC = () => {
     error,
     markAsRead,
     markAllAsRead,
-  } = useNotificationViewModel(user?.mobile_no || null);
+  } = useNotificationViewModel(user?.email || null);
 
   const handleMarkAsRead = async (id: string) => {
     try {

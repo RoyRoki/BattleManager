@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useOTP } from '../hooks/useOTP';
-import { mobileSchema } from '../utils/validations';
+import { emailSchema } from '../utils/validations';
 import toast from 'react-hot-toast';
 
 interface OTPModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (mobileNo: string) => void;
+  onSuccess: (email: string) => void;
 }
 
 export const OTPModal: React.FC<OTPModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const [mobileNumber, setMobileNumber] = useState('');
-  const [step, setStep] = useState<'mobile' | 'otp'>('mobile');
+  const [email, setEmail] = useState('');
+  const [step, setStep] = useState<'email' | 'otp'>('email');
   const [enteredOTP, setEnteredOTP] = useState('');
   const {
     sendOTPCode,
@@ -22,29 +22,29 @@ export const OTPModal: React.FC<OTPModalProps> = ({ isOpen, onClose, onSuccess }
     attempts,
   } = useOTP();
 
-  const handleMobileSubmit = async (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      mobileSchema.parse(mobileNumber);
-      const success = await sendOTPCode(mobileNumber);
+      emailSchema.parse(email);
+      const success = await sendOTPCode(email);
       if (success) {
         setStep('otp');
       }
     } catch (error: any) {
-      toast.error(error.message || 'Invalid mobile number');
+      toast.error(error.message || 'Invalid email address');
     }
   };
 
   const handleOTPSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = await verifyOTPCode(enteredOTP, mobileNumber);
+    const success = await verifyOTPCode(enteredOTP, email);
     if (success) {
-      onSuccess(mobileNumber);
+      onSuccess(email);
       onClose();
       // Reset form
-      setMobileNumber('');
+      setEmail('');
       setEnteredOTP('');
-      setStep('mobile');
+      setStep('email');
     }
   };
 
@@ -61,17 +61,16 @@ export const OTPModal: React.FC<OTPModalProps> = ({ isOpen, onClose, onSuccess }
         >
           <h2 className="text-2xl font-heading text-primary mb-4">Login</h2>
 
-          {step === 'mobile' ? (
-            <form onSubmit={handleMobileSubmit}>
+          {step === 'email' ? (
+            <form onSubmit={handleEmailSubmit}>
               <div className="mb-4">
-                <label className="block text-sm mb-2">Mobile Number</label>
+                <label className="block text-sm mb-2">Email Address</label>
                 <input
-                  type="tel"
-                  value={mobileNumber}
-                  onChange={(e) => setMobileNumber(e.target.value)}
-                  placeholder="Enter 10-digit mobile number"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value.trim())}
+                  placeholder="your@email.com"
                   className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-primary"
-                  maxLength={10}
                   required
                 />
               </div>
@@ -105,7 +104,7 @@ export const OTPModal: React.FC<OTPModalProps> = ({ isOpen, onClose, onSuccess }
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setStep('mobile')}
+                  onClick={() => setStep('email')}
                   className="flex-1 bg-bg-tertiary text-white py-2 rounded-lg hover:bg-opacity-80 transition"
                 >
                   Back

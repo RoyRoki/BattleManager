@@ -1,12 +1,12 @@
 /**
- * Request OTP to be sent via Fast2SMS (via Vercel serverless function)
+ * Request OTP to be sent via BREVO SMTP (via Vercel serverless function)
  * OTP is generated server-side and stored in Firebase
- * @param mobileNumber - 10-digit mobile number
+ * @param email - Email address
  * @returns Promise that resolves when OTP is sent
  */
-export const sendOTP = async (mobileNumber: string): Promise<void> => {
+export const sendOTP = async (email: string): Promise<void> => {
   try {
-    console.log('sendOTP: Starting OTP request for mobile:', mobileNumber);
+    console.log('sendOTP: Starting OTP request for email:', email);
     
     // Call Vercel serverless function - OTP is generated server-side
     console.log('sendOTP: Calling /api/send-otp endpoint');
@@ -15,7 +15,7 @@ export const sendOTP = async (mobileNumber: string): Promise<void> => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ mobileNumber }),
+      body: JSON.stringify({ email }),
     });
 
     console.log('sendOTP: Response status:', response.status, response.statusText);
@@ -30,7 +30,7 @@ export const sendOTP = async (mobileNumber: string): Promise<void> => {
     }
 
     // Log success
-    console.log('sendOTP: OTP sent successfully via Fast2SMS');
+    console.log('sendOTP: OTP sent successfully via BREVO');
   } catch (error: any) {
     console.error('sendOTP: Exception caught:', error);
     console.error('sendOTP: Error details:', {
@@ -44,12 +44,12 @@ export const sendOTP = async (mobileNumber: string): Promise<void> => {
 
 /**
  * Verify OTP via server-side verification (Vercel serverless function)
- * @param mobileNumber - 10-digit mobile number
+ * @param email - Email address
  * @param enteredOTP - OTP entered by user
  * @returns Promise<boolean> - true if OTP is valid
  */
 export const verifyOTP = async (
-  mobileNumber: string,
+  email: string,
   enteredOTP: string
 ): Promise<{ success: boolean; remainingAttempts?: number; error?: string }> => {
   try {
@@ -58,7 +58,7 @@ export const verifyOTP = async (
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ mobileNumber, otp: enteredOTP }),
+      body: JSON.stringify({ email, otp: enteredOTP }),
     });
 
     const data = await response.json();

@@ -1,5 +1,5 @@
 export interface User {
-  mobile_no: string;
+  email: string;
   name?: string;
   avatar_url?: string;
   points: number;

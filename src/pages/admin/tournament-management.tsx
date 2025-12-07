@@ -729,7 +729,7 @@ const EnrolledPlayersModal: React.FC<EnrolledPlayersModalProps> = ({ tournamentI
         const data = doc.data();
         return {
           id: doc.id,
-          mobile_no: data.mobile_no,
+          email: data.email,
           name: data.name || 'Unknown',
           ff_id: data.ff_id || 'N/A',
           points: data.points || 0,
@@ -787,7 +787,7 @@ const EnrolledPlayersModal: React.FC<EnrolledPlayersModalProps> = ({ tournamentI
         )}
                 <div className="flex-1">
                   <p className="text-white font-heading">{user.name}</p>
-                  <p className="text-sm text-gray-400">Mobile: {user.mobile_no}</p>
+                  <p className="text-sm text-gray-400">Email: {user.email}</p>
                   <p className="text-xs text-gray-500">FF ID: {user.ff_id}</p>
       </div>
                 <div className="text-right">
@@ -835,12 +835,13 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       })
       .map((doc) => {
         const data = doc.data();
-        const existingKills = tournament.player_kills?.[data.mobile_no]?.kills || 0;
-        const pointsCredited = tournament.player_kills?.[data.mobile_no]?.points_credited || 0;
-        const customCredit = customCredits[data.mobile_no] || tournament.payment_info?.custom_credits?.[data.mobile_no] || 0;
+        const userEmail = data.email || doc.id; // Use email or fallback to doc.id
+        const existingKills = tournament.player_kills?.[userEmail]?.kills || 0;
+        const pointsCredited = tournament.player_kills?.[userEmail]?.points_credited || 0;
+        const customCredit = customCredits[userEmail] || tournament.payment_info?.custom_credits?.[userEmail] || 0;
         return {
           id: doc.id,
-          mobile_no: data.mobile_no,
+          email: userEmail,
           name: data.name || 'Unknown',
           ff_id: data.ff_id || 'N/A',
           avatar_url: data.avatar_url,
@@ -862,8 +863,8 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
 
     // Sort by kills (highest first)
     return filtered.sort((a, b) => {
-      const killsA = killCounts[a.mobile_no] ?? a.existingKills;
-      const killsB = killCounts[b.mobile_no] ?? b.existingKills;
+      const killsA = killCounts[a.email] ?? a.existingKills;
+      const killsB = killCounts[b.email] ?? b.existingKills;
       return killsB - killsA;
     });
   }, [users, tournament.id, tournament.player_kills, killCounts, searchQuery, customCredits]);
@@ -872,8 +873,8 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
   React.useEffect(() => {
     if (tournament.player_kills) {
       const initialKills: Record<string, number> = {};
-      Object.entries(tournament.player_kills).forEach(([mobile, data]) => {
-        initialKills[mobile] = data.kills;
+      Object.entries(tournament.player_kills).forEach(([email, data]) => {
+        initialKills[email] = data.kills;
       });
       setKillCounts(initialKills);
     }
@@ -885,26 +886,26 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
     }
   }, [tournament.player_kills, tournament.payment_info]);
 
-  const handleKillChange = (mobile: string, kills: number) => {
+  const handleKillChange = (email: string, kills: number) => {
     // Check if payment has been made
     if (tournament.payment_info?.paid_at) {
       toast.error('Cannot edit kill list after payment has been made!');
       return;
     }
-    setKillCounts((prev) => ({
-      ...prev,
-      [mobile]: Math.max(0, kills),
-    }));
+      setKillCounts((prev) => ({
+        ...prev,
+        [email]: Math.max(0, kills),
+      }));
     setHasChanges(true);
   };
 
-  const handleCustomCredit = async (mobile: string, amount: number) => {
+  const handleCustomCredit = async (email: string, amount: number) => {
     if (amount <= 0) {
       toast.error('Please enter a valid amount');
       return;
     }
 
-    const user = enrolledUsers.find((u) => u.mobile_no === mobile);
+    const user = enrolledUsers.find((u) => u.email === email);
     if (!user) return;
 
     // Check if payment has been made
@@ -918,7 +919,7 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
 
     try {
       // Credit points immediately
-      const success = await addPoints(mobile, amount);
+      const success = await addPoints(email, amount);
       if (!success) {
         toast.error('Failed to credit points');
         return;
@@ -927,16 +928,16 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       // Update custom credits
       setCustomCredits((prev) => ({
         ...prev,
-        [mobile]: amount,
+        [email]: amount,
       }));
 
       // Update tournament payment info
       const existingKills = tournament.player_kills || {};
-      const kills = killCounts[mobile] ?? user.existingKills;
+      const kills = killCounts[email] ?? user.existingKills;
       const updatedKills = {
         ...existingKills,
-        [mobile]: {
-          ...existingKills[mobile],
+        [email]: {
+          ...existingKills[email],
           kills: kills,
           points_credited: amount,
           credited_at: new Date(),
@@ -950,7 +951,7 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
 
       // Create payment record for tournament winning
       await addDoc(collection(firestore, 'payments'), {
-        user_mobile: mobile,
+        user_email: email,
         user_name: user.name || 'Unknown',
         amount: amount,
         type: 'tournament_winning',
@@ -997,9 +998,9 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       const playerKills: Record<string, PlayerKill> = {};
       
       enrolledUsers.forEach((user) => {
-        const kills = killCounts[user.mobile_no] ?? user.existingKills;
-        const existingData = tournament.player_kills?.[user.mobile_no];
-        playerKills[user.mobile_no] = {
+        const kills = killCounts[user.email] ?? user.existingKills;
+        const existingData = tournament.player_kills?.[user.email];
+        playerKills[user.email] = {
           kills,
           updated_at: new Date(),
           // Preserve existing payment info
@@ -1023,12 +1024,12 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
     }
   };
 
-  const handlePayIndividual = async (mobile: string) => {
-    const user = enrolledUsers.find((u) => u.mobile_no === mobile);
+  const handlePayIndividual = async (email: string) => {
+    const user = enrolledUsers.find((u) => u.email === email);
     if (!user) return;
 
-    const kills = killCounts[mobile] ?? user.existingKills;
-    const pointsToCredit = calculatePoints(kills, mobile);
+    const kills = killCounts[email] ?? user.existingKills;
+    const pointsToCredit = calculatePoints(kills, email);
 
     if (pointsToCredit <= 0) {
       toast.error('No points to credit');
@@ -1036,21 +1037,21 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
     }
 
     // Show confirmation modal
-    setShowCreditConfirmModal(mobile);
+    setShowCreditConfirmModal(email);
   };
 
-  const confirmPayIndividual = async (mobile: string) => {
-    const user = enrolledUsers.find((u) => u.mobile_no === mobile);
+  const confirmPayIndividual = async (email: string) => {
+    const user = enrolledUsers.find((u) => u.email === email);
     if (!user) return;
 
-    const kills = killCounts[mobile] ?? user.existingKills;
-    const pointsToCredit = calculatePoints(kills, mobile);
+    const kills = killCounts[email] ?? user.existingKills;
+    const pointsToCredit = calculatePoints(kills, email);
 
     setShowCreditConfirmModal(null);
     setPaying(true);
     try {
       // Credit points
-      const success = await addPoints(mobile, pointsToCredit);
+      const success = await addPoints(email, pointsToCredit);
       if (!success) {
         toast.error('Failed to credit points');
         return;
@@ -1060,8 +1061,8 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       const existingKills = tournament.player_kills || {};
       const updatedKills = {
         ...existingKills,
-        [mobile]: {
-          ...existingKills[mobile],
+        [email]: {
+          ...existingKills[email],
           kills: kills,
           points_credited: pointsToCredit,
           credited_at: new Date(),
@@ -1075,7 +1076,7 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
 
       // Create payment record for tournament winning
       await addDoc(collection(firestore, 'payments'), {
-        user_mobile: mobile,
+        user_email: email,
         user_name: user.name || 'Unknown',
         amount: pointsToCredit,
         type: 'tournament_winning',
@@ -1116,15 +1117,15 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       const customCreditsToSave: Record<string, number> = {};
 
       for (const user of enrolledUsers) {
-        const kills = killCounts[user.mobile_no] ?? user.existingKills;
-        const pointsToCredit = calculatePoints(kills, user.mobile_no);
+        const kills = killCounts[user.email] ?? user.existingKills;
+        const pointsToCredit = calculatePoints(kills, user.email);
 
         if (pointsToCredit > 0) {
           // Credit points
-          const success = await addPoints(user.mobile_no, pointsToCredit);
+          const success = await addPoints(user.email, pointsToCredit);
           if (success) {
             totalPaid += pointsToCredit;
-            updatedKills[user.mobile_no] = {
+            updatedKills[user.email] = {
               kills,
               updated_at: new Date(),
               points_credited: pointsToCredit,
@@ -1133,9 +1134,9 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
           }
 
           // Save custom credits if any
-          const custom = customCredits[user.mobile_no];
+          const custom = customCredits[user.email];
           if (custom) {
-            customCreditsToSave[user.mobile_no] = custom;
+            customCreditsToSave[user.email] = custom;
           }
         }
       }
@@ -1158,12 +1159,12 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
 
       // Create payment records for all tournament winnings
       for (const user of enrolledUsers) {
-        const kills = killCounts[user.mobile_no] ?? user.existingKills;
-        const pointsToCredit = calculatePoints(kills, user.mobile_no);
+        const kills = killCounts[user.email] ?? user.existingKills;
+        const pointsToCredit = calculatePoints(kills, user.email);
         
-        if (pointsToCredit > 0 && updatedKills[user.mobile_no]) {
+        if (pointsToCredit > 0 && updatedKills[user.email]) {
           await addDoc(collection(firestore, 'payments'), {
-            user_mobile: user.mobile_no,
+            user_email: user.email,
             user_name: user.name || 'Unknown',
             amount: pointsToCredit,
             type: 'tournament_winning',
@@ -1195,14 +1196,14 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
 
   const totalKills = useMemo(() => {
     return enrolledUsers.reduce((sum, user) => {
-      return sum + (killCounts[user.mobile_no] ?? user.existingKills);
+      return sum + (killCounts[user.email] ?? user.existingKills);
     }, 0);
   }, [enrolledUsers, killCounts]);
 
   const totalPointsToPay = useMemo(() => {
     return enrolledUsers.reduce((sum, user) => {
-      const kills = killCounts[user.mobile_no] ?? user.existingKills;
-      const points = calculatePoints(kills, user.mobile_no);
+      const kills = killCounts[user.email] ?? user.existingKills;
+      const points = calculatePoints(kills, user.email);
       // Only count if not already paid
       if (!user.pointsCredited) {
         return sum + points;
@@ -1346,10 +1347,10 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
               </div>
             ) : (
               enrolledUsers.map((user, index) => {
-                const currentKills = killCounts[user.mobile_no] ?? user.existingKills;
-                const pointsToCredit = calculatePoints(currentKills, user.mobile_no);
+                const currentKills = killCounts[user.email] ?? user.existingKills;
+                const pointsToCredit = calculatePoints(currentKills, user.email);
                 const isPaid = !!user.pointsCredited;
-                const hasCustomCredit = customCredits[user.mobile_no] || tournament.payment_info?.custom_credits?.[user.mobile_no];
+                const hasCustomCredit = customCredits[user.email] || tournament.payment_info?.custom_credits?.[user.email];
 
                 return (
                   <motion.div
@@ -1404,7 +1405,7 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
                         {/* Kill Counter */}
                         <div className="flex items-center gap-1">
                           <button
-                            onClick={() => handleKillChange(user.mobile_no, currentKills - 1)}
+                            onClick={() => handleKillChange(user.email, currentKills - 1)}
                             disabled={isPaymentMade}
                             className="w-7 h-7 md:w-8 md:h-8 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-white transition text-sm md:text-base"
                           >
@@ -1413,13 +1414,13 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
                           <input
                             type="number"
                             value={currentKills}
-                            onChange={(e) => handleKillChange(user.mobile_no, parseInt(e.target.value) || 0)}
+                            onChange={(e) => handleKillChange(user.email, parseInt(e.target.value) || 0)}
                             disabled={isPaymentMade}
                             className="w-12 md:w-16 h-7 md:h-8 text-center bg-bg border border-gray-600 rounded text-orange-400 font-heading text-sm md:text-base focus:outline-none focus:border-orange-500 disabled:opacity-50"
                             min="0"
                           />
                           <button
-                            onClick={() => handleKillChange(user.mobile_no, currentKills + 1)}
+                            onClick={() => handleKillChange(user.email, currentKills + 1)}
                             disabled={isPaymentMade}
                             className="w-7 h-7 md:w-8 md:h-8 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-white transition text-sm md:text-base"
                           >
@@ -1442,7 +1443,7 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
                         <div className="flex flex-row md:flex-col gap-2">
                           {!isPaid && (
                             <button
-                              onClick={() => handlePayIndividual(user.mobile_no)}
+                              onClick={() => handlePayIndividual(user.email)}
                               disabled={paying || pointsToCredit <= 0}
                               className="px-2 md:px-3 py-1 md:py-1.5 bg-green-600 text-white rounded text-xs md:text-sm font-heading hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
                             >
@@ -1451,8 +1452,8 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
                           )}
                           <button
                             onClick={() => {
-                              setShowCustomCreditModal(user.mobile_no);
-                              setCustomCreditAmount(customCredits[user.mobile_no]?.toString() || '');
+                              setShowCustomCreditModal(user.email);
+                              setCustomCreditAmount(customCredits[user.email]?.toString() || '');
                             }}
                             disabled={isPaymentMade}
                             className="px-2 md:px-3 py-1 md:py-1.5 bg-purple-600 text-white rounded text-xs md:text-sm font-heading hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
@@ -1474,10 +1475,10 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       {/* Individual Credit Confirmation Modal */}
       <AnimatePresence>
         {showCreditConfirmModal && (() => {
-          const user = enrolledUsers.find((u) => u.mobile_no === showCreditConfirmModal);
+          const user = enrolledUsers.find((u) => u.email === showCreditConfirmModal);
           if (!user) return null;
-          const kills = killCounts[user.mobile_no] ?? user.existingKills;
-          const pointsToCredit = calculatePoints(kills, user.mobile_no);
+          const kills = killCounts[user.email] ?? user.existingKills;
+          const pointsToCredit = calculatePoints(kills, user.email);
           
           return (
             <motion.div

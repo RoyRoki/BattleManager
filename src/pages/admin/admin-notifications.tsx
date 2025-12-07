@@ -444,7 +444,7 @@ export const AdminNotifications: React.FC = () => {
                   className="mt-4 bg-bg-secondary border border-gray-800 rounded-lg h-[calc(100vh-400px)] min-h-[500px] overflow-hidden"
                 >
                   <SupportChatInterface
-                    targetUserMobile={selectedChatUser}
+                    targetUserEmail={selectedChatUser}
                     onBack={() => setSelectedChatUser(null)}
                     showHeader={true}
                   />

@@ -58,8 +58,11 @@ export const useEnrollTournament = () => {
     setIsEnrolling(true);
 
     try {
+      // Normalize email for Firestore lookup
+      const normalizedEmail = user.email.toLowerCase().trim();
+      
       // Deduct points using transaction
-      const pointsDeducted = await deductPoints(user.mobile_no, tournament.entry_amount);
+      const pointsDeducted = await deductPoints(normalizedEmail, tournament.entry_amount);
 
       if (!pointsDeducted) {
         toast.error('Failed to deduct points');
@@ -74,7 +77,7 @@ export const useEnrollTournament = () => {
       });
 
       // Update user enrolled tournaments
-      const userRef = doc(firestore, 'users', user.mobile_no);
+      const userRef = doc(firestore, 'users', normalizedEmail);
       await updateDoc(userRef, {
         enrolled_tournaments: arrayUnion(tournament.id),
         updated_at: new Date(),

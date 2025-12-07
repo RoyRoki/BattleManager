@@ -63,7 +63,7 @@ export const UserManagement: React.FC = () => {
                       <h3 className="text-lg font-heading text-primary">
                         {user.name || 'No Name'}
                       </h3>
-                      <p className="text-sm text-gray-400">Mobile: {user.mobile_no}</p>
+                      <p className="text-sm text-gray-400">Email: {user.email}</p>
                       <div className="flex gap-4 mt-2 text-sm">
                         <span className="text-gray-400">Points: {user.points}</span>
                         <span className="text-gray-400">

@@ -12,7 +12,7 @@ interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   isAdmin: boolean;
   isLoading: boolean;
-  login: (mobileNo: string) => Promise<void>;
+  login: (email: string) => Promise<void>;
   adminLogin: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -33,7 +33,7 @@ interface AuthProviderProps {
 }
 
 // Storage key for persistent auth
-const AUTH_STORAGE_KEY = 'battlemanager_auth_mobile';
+const AUTH_STORAGE_KEY = 'battlemanager_auth_email';
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -41,20 +41,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchUserData = async (mobileNo: string) => {
+  const fetchUserData = async (email: string) => {
     try {
+      // Normalize email (lowercase) for Firestore lookup
+      const normalizedEmail = email.toLowerCase().trim();
+      
       // Skip Firestore lookup for Firebase Auth UIDs (admin users)
       // Admin users use Firebase Auth, not the users collection
-      // The users collection uses mobile numbers as document IDs
-      // If mobileNo looks like a Firebase UID (long alphanumeric), skip
-      if (mobileNo.length > 20 || !/^\d+$/.test(mobileNo)) {
-        // This is likely a Firebase Auth UID, not a mobile number
+      // The users collection uses email addresses as document IDs
+      // If email looks like a Firebase UID (long alphanumeric without @), skip
+      if (normalizedEmail.length > 50 || !normalizedEmail.includes('@')) {
+        // This might be a Firebase Auth UID, not an email
         // Admin users don't have documents in the users collection
-        console.log('Skipping Firestore lookup for Firebase Auth UID (admin user)');
+        console.log('Skipping Firestore lookup for potential Firebase Auth UID (admin user)');
         return null;
       }
 
-      const userDoc = await getDoc(doc(firestore, 'users', mobileNo));
+      const userDoc = await getDoc(doc(firestore, 'users', normalizedEmail));
       if (userDoc.exists()) {
         const userData = userDoc.data() as User;
         const user: User = {
@@ -69,8 +72,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               : (userData.updated_at as any)?.toDate?.() || new Date(),
         };
         setUser(user);
-        // Store mobile number in localStorage for persistence
-        localStorage.setItem(AUTH_STORAGE_KEY, mobileNo);
+        // Store email in localStorage for persistence
+        localStorage.setItem(AUTH_STORAGE_KEY, normalizedEmail);
         return user;
       } else {
         // User not found - clear stored auth
@@ -119,12 +122,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Check for stored authentication on app load/refresh
     const restoreAuth = async () => {
       try {
-        // First, check localStorage for stored mobile number (custom OTP flow)
-        const storedMobile = localStorage.getItem(AUTH_STORAGE_KEY);
+        // First, check localStorage for stored email (custom OTP flow)
+        const storedEmail = localStorage.getItem(AUTH_STORAGE_KEY);
         
-        if (storedMobile) {
-          console.log('AuthContext: Restoring auth from localStorage:', storedMobile);
-          const restoredUser = await fetchUserData(storedMobile);
+        if (storedEmail) {
+          console.log('AuthContext: Restoring auth from localStorage:', storedEmail);
+          const restoredUser = await fetchUserData(storedEmail);
           if (restoredUser && isMounted) {
             console.log('AuthContext: User restored successfully');
             setIsLoading(false);
@@ -175,11 +178,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               
               // For admin users, don't try to fetch from Firestore users collection
               // Admin users are authenticated via Firebase Auth, not the custom OTP flow
-              // Only fetch user data if this is a regular user (mobile number as UID)
-              // Firebase Auth UIDs are long alphanumeric strings, mobile numbers are 10 digits
+              // Only fetch user data if this is a regular user (email as UID)
+              // Firebase Auth UIDs are long alphanumeric strings, emails contain @
               const uid = firebaseUser.uid;
-              // Only fetch if it looks like a mobile number (10 digits)
-              if (/^\d{10}$/.test(uid)) {
+              // Only fetch if it looks like an email (contains @)
+              if (uid.includes('@')) {
                 await fetchUserData(uid);
               } else {
                 // This is an admin user - don't fetch from Firestore
@@ -187,13 +190,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               }
             } else {
               // No Firebase Auth user - this is normal for regular users
-              // Only clear if we don't have a stored mobile number
-              if (!storedMobile) {
-                console.log('AuthContext: No Firebase Auth user and no stored mobile - clearing auth');
+              // Only clear if we don't have a stored email
+              if (!storedEmail) {
+                console.log('AuthContext: No Firebase Auth user and no stored email - clearing auth');
                 setUser(null);
                 setIsAdmin(false);
               } else {
-                console.log('AuthContext: No Firebase Auth user but stored mobile exists - keeping regular user auth');
+                console.log('AuthContext: No Firebase Auth user but stored email exists - keeping regular user auth');
               }
             }
             if (isMounted) {
@@ -226,10 +229,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
-  const login = async (mobileNo: string) => {
+  const login = async (email: string) => {
     // After OTP verification, fetch user data
     // User document should already be created in useOTP hook
-    await fetchUserData(mobileNo);
+    await fetchUserData(email);
   };
 
   const adminLogin = async (email: string, password: string) => {
@@ -362,8 +365,8 @@ To verify the claim is set, run: node scripts/verify-admin.js ${email}`;
   };
 
   const refreshUser = async () => {
-    if (user?.mobile_no) {
-      await fetchUserData(user.mobile_no);
+    if (user?.email) {
+      await fetchUserData(user.email);
     }
   };
 

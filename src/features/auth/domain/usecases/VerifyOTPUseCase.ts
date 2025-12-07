@@ -14,7 +14,7 @@ export class VerifyOTPUseCase {
   constructor(private authRepository: IAuthRepository) {}
 
   async execute(
-    mobileNumber: string,
+    email: string,
     otp: string,
     signupData?: SignupData
   ): Promise<VerifyOTPResult> {
@@ -22,7 +22,7 @@ export class VerifyOTPUseCase {
     otpSchema.parse(otp);
 
     // Verify OTP via repository
-    const verificationResult = await this.authRepository.verifyOTP(mobileNumber, otp);
+    const verificationResult = await this.authRepository.verifyOTP(email, otp);
 
     if (!verificationResult.success) {
       return {
@@ -33,7 +33,7 @@ export class VerifyOTPUseCase {
     }
 
     // OTP is verified - check if user exists
-    const userExists = await this.authRepository.checkUserExists(mobileNumber);
+    const userExists = await this.authRepository.checkUserExists(email);
 
     if (!userExists) {
       // New user signup - require signup data
@@ -54,7 +54,7 @@ export class VerifyOTPUseCase {
       };
     } else {
       // Existing user login
-      const user = await this.authRepository.getUserByMobile(mobileNumber);
+      const user = await this.authRepository.getUserByEmail(email);
       toast.success('Login successful!');
       
       return {

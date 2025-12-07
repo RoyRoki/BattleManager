@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { firestore } from '../services/firebaseService';
 import { sendOTP, verifyOTP } from '../services/otpService';
-import { mobileSchema, otpSchema } from '../utils/validations';
+import { emailSchema, otpSchema } from '../utils/validations';
 import { hashPassword, verifyPassword } from '../utils/encryptCredentials';
 import toast from 'react-hot-toast';
 
 interface SignupData {
   name: string;
   ff_id: string;
-  mobileNumber: string;
+  email: string;
   password?: string; // Optional password for signup
 }
 
@@ -30,13 +30,13 @@ export const useOTP = () => {
     isLoadingPassword: false,
   });
 
-  const sendOTPCode = async (mobileNumber: string): Promise<boolean> => {
+  const sendOTPCode = async (email: string): Promise<boolean> => {
     try {
-      console.log('sendOTPCode: Starting, mobile:', mobileNumber);
+      console.log('sendOTPCode: Starting, email:', email);
       
-      // Validate mobile number
-      console.log('sendOTPCode: Validating mobile number');
-      mobileSchema.parse(mobileNumber);
+      // Validate email
+      console.log('sendOTPCode: Validating email');
+      emailSchema.parse(email);
       console.log('sendOTPCode: Validation passed');
 
       console.log('sendOTPCode: Setting loading state');
@@ -44,7 +44,7 @@ export const useOTP = () => {
 
       // Call serverless function - OTP is generated and stored server-side
       console.log('sendOTPCode: Calling sendOTP service');
-      await sendOTP(mobileNumber);
+      await sendOTP(email);
       console.log('sendOTPCode: sendOTP completed successfully');
 
       console.log('sendOTPCode: Clearing loading state');
@@ -74,7 +74,7 @@ export const useOTP = () => {
 
   const verifyOTPCode = async (
     enteredOTP: string,
-    mobileNumber: string,
+    email: string,
     signupData?: SignupData
   ): Promise<boolean> => {
     try {
@@ -82,14 +82,17 @@ export const useOTP = () => {
 
       setOtpState((prev) => ({ ...prev, isLoadingVerification: true }));
 
+      // Normalize email (lowercase) for Firestore lookup
+      const normalizedEmail = email.toLowerCase().trim();
+
       // Verify OTP via serverless function (server-side verification)
-      const result = await verifyOTP(mobileNumber, enteredOTP);
+      const result = await verifyOTP(normalizedEmail, enteredOTP);
 
       setOtpState((prev) => ({ ...prev, isLoadingVerification: false }));
 
       if (result.success) {
         // OTP is verified - create/update user
-        const userRef = doc(firestore, 'users', mobileNumber);
+        const userRef = doc(firestore, 'users', normalizedEmail);
         const userDoc = await getDoc(userRef);
 
         if (!userDoc.exists()) {
@@ -103,7 +106,7 @@ export const useOTP = () => {
           const passwordHash = signupData.password ? hashPassword(signupData.password) : undefined;
 
           await setDoc(userRef, {
-            mobile_no: mobileNumber,
+            email: normalizedEmail,
             name: signupData.name,
             ff_id: signupData.ff_id,
             points: 0,
@@ -157,12 +160,15 @@ export const useOTP = () => {
     }
   };
 
-  const checkUserExists = async (mobileNumber: string): Promise<boolean> => {
+  const checkUserExists = async (email: string): Promise<boolean> => {
     const MAX_RETRIES = 3;
     const TIMEOUT_MS = 60000; // 60 seconds (1 minute) timeout per attempt for production
     let lastError: Error | null = null;
     
-    console.log('checkUserExists: Starting check for mobile:', mobileNumber);
+    // Normalize email (lowercase) for Firestore lookup
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    console.log('checkUserExists: Starting check for email:', normalizedEmail);
     
     // Check if Firestore is initialized
     if (!firestore) {
@@ -177,7 +183,7 @@ export const useOTP = () => {
       try {
         console.log(`checkUserExists: Attempt ${attempt + 1}/${MAX_RETRIES}`);
         
-        const userRef = doc(firestore, 'users', mobileNumber);
+        const userRef = doc(firestore, 'users', normalizedEmail);
         
         // Create timeout promise
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -266,14 +272,16 @@ export const useOTP = () => {
     throw lastError || new Error('Failed to check user after retries');
   };
 
-  const loginWithPassword = async (mobileNumber: string, password: string): Promise<boolean> => {
+  const loginWithPassword = async (email: string, password: string): Promise<boolean> => {
     try {
-      mobileSchema.parse(mobileNumber);
+      // Normalize email (lowercase) for Firestore lookup
+      const normalizedEmail = email.toLowerCase().trim();
+      emailSchema.parse(normalizedEmail);
 
       setOtpState((prev) => ({ ...prev, isLoadingPassword: true }));
 
       // Get user document
-      const userRef = doc(firestore, 'users', mobileNumber);
+      const userRef = doc(firestore, 'users', normalizedEmail);
       const userDoc = await getDoc(userRef);
 
       if (!userDoc.exists()) {
@@ -312,20 +320,22 @@ export const useOTP = () => {
   };
 
   const resetPassword = async (
-    mobileNumber: string,
+    email: string,
     otp: string,
     newPassword: string,
     skipOTPVerification: boolean = false
   ): Promise<boolean> => {
     try {
-      mobileSchema.parse(mobileNumber);
+      // Normalize email (lowercase) for Firestore lookup
+      const normalizedEmail = email.toLowerCase().trim();
+      emailSchema.parse(normalizedEmail);
 
       setOtpState((prev) => ({ ...prev, isLoadingPassword: true }));
 
       // Verify OTP unless already verified
       if (!skipOTPVerification) {
         otpSchema.parse(otp);
-        const result = await verifyOTP(mobileNumber, otp);
+        const result = await verifyOTP(normalizedEmail, otp);
 
         if (!result.success) {
           setOtpState((prev) => ({
@@ -347,7 +357,7 @@ export const useOTP = () => {
       }
 
       // OTP verified (or skipped) - now update password
-      const userRef = doc(firestore, 'users', mobileNumber);
+      const userRef = doc(firestore, 'users', normalizedEmail);
       const userDoc = await getDoc(userRef);
 
       if (!userDoc.exists()) {

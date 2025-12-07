@@ -10,23 +10,23 @@ export class AuthRepository implements IAuthRepository {
     private userDataSource: IUserDataSource
   ) {}
 
-  async sendOTP(mobileNumber: string): Promise<void> {
-    await this.otpDataSource.sendOTP(mobileNumber);
+  async sendOTP(email: string): Promise<void> {
+    await this.otpDataSource.sendOTP(email);
   }
 
-  async verifyOTP(mobileNumber: string, otp: string): Promise<OTPVerificationResponse> {
-    return await this.otpDataSource.verifyOTP(mobileNumber, otp);
+  async verifyOTP(email: string, otp: string): Promise<OTPVerificationResponse> {
+    return await this.otpDataSource.verifyOTP(email, otp);
   }
 
-  async checkUserExists(mobileNumber: string): Promise<boolean> {
-    return await this.userDataSource.checkUserExists(mobileNumber);
+  async checkUserExists(email: string): Promise<boolean> {
+    return await this.userDataSource.checkUserExists(email);
   }
 
   async createUser(signupData: SignupData): Promise<User> {
     return await this.userDataSource.createUser(signupData);
   }
 
-  async getUserByMobile(mobileNumber: string): Promise<User | null> {
-    return await this.userDataSource.getUserByMobile(mobileNumber);
+  async getUserByEmail(email: string): Promise<User | null> {
+    return await this.userDataSource.getUserByEmail(email);
   }
 }

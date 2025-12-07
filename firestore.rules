@@ -4,7 +4,7 @@ service cloud.firestore {
     // Users collection - custom OTP auth flow
     // Note: Security is enforced via server-side OTP verification
     // For development: Allow all operations on users collection
-    match /users/{mobileNo} {
+    match /users/{email} {
       allow read, write: if true;
     }
 
@@ -36,7 +36,7 @@ service cloud.firestore {
 
     // Notifications collection - users can read their own, admins can read all
     match /notifications/{notificationId} {
-      // Allow read for all documents (client-side filtering by user_mobile)
+      // Allow read for all documents (client-side filtering by user_email)
       // This allows unauthenticated users to read notifications via queries
       allow read: if true;
       // Only admins can create notifications

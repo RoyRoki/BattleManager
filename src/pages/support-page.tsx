@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { HiArrowLeft } from 'react-icons/hi';
+import { MdEmail } from 'react-icons/md';
+import { FaInstagram } from 'react-icons/fa';
 import { SupportChatInterface } from '../components/support-chat-interface';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -106,13 +108,51 @@ export const SupportPage: React.FC = () => {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mt-8 bg-bg-secondary border border-primary rounded-lg p-6"
+              className="mt-8 bg-bg-secondary border border-gray-800 rounded-lg p-6"
             >
-              <h3 className="text-xl font-heading text-primary mb-4">Need More Help?</h3>
-              <p className="text-gray-300 mb-4">
-                If you couldn't find the answer you're looking for, use the "Chat with Admin" tab to
-                get one-on-one support from our team.
+              <h3 className="text-xl font-heading text-primary mb-4">Contact Support</h3>
+              <p className="text-gray-300 mb-6">
+                Need help? Reach out to our support team via email. We're here to assist you!
               </p>
+              <div className="space-y-3">
+                <a
+                  href="mailto:battlemanagerofficial@gmail.com"
+                  className="flex items-center gap-3 text-gray-300 hover:text-primary transition-colors"
+                >
+                  <MdEmail className="text-xl text-primary" />
+                  <span>battlemanagerofficial@gmail.com</span>
+                </a>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 bg-bg-secondary border border-primary rounded-lg p-6"
+            >
+              <h3 className="text-xl font-heading text-primary mb-4">Have a Project in Mind?</h3>
+              <p className="text-gray-300 mb-6">
+                Let's turn your ideas into reality. I'm Roki Roy, providing full-stack development
+                services including custom software and mobile apps. Let's chat!
+              </p>
+              <div className="space-y-3">
+                <a
+                  href="mailto:rokiroydev@gmail.com"
+                  className="flex items-center gap-3 text-gray-300 hover:text-primary transition-colors"
+                >
+                  <MdEmail className="text-xl text-primary" />
+                  <span>rokiroydev@gmail.com</span>
+                </a>
+                <a
+                  href="https://instagram.com/rokiroydev"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 text-gray-300 hover:text-primary transition-colors"
+                >
+                  <FaInstagram className="text-xl text-primary" />
+                  <span>@rokiroydev</span>
+                </a>
+              </div>
             </motion.div>
           </>
         ) : (

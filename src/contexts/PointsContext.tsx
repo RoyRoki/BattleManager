@@ -30,14 +30,14 @@ export const PointsProvider: React.FC<PointsProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!user?.mobile_no) {
+    if (!user?.email) {
       setPoints(0);
       setIsLoading(false);
       return;
     }
 
     const unsubscribe = onSnapshot(
-      doc(firestore, 'users', user.mobile_no),
+      doc(firestore, 'users', user.email.toLowerCase().trim()),
       (docSnapshot) => {
         if (docSnapshot.exists()) {
           const userData = docSnapshot.data() as User;
@@ -52,10 +52,10 @@ export const PointsProvider: React.FC<PointsProviderProps> = ({ children }) => {
     );
 
     return () => unsubscribe();
-  }, [user?.mobile_no]);
+  }, [user?.email]);
 
   const refreshPoints = async () => {
-    if (user?.mobile_no) {
+    if (user?.email) {
       // Points will be updated via real-time listener
       // This is just for manual refresh if needed
       setIsLoading(true);

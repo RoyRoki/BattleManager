@@ -1,25 +1,25 @@
 import { OTPVerificationResponse } from '../../domain/entities/OTPRequest';
 
 export interface IOTPDataSource {
-  sendOTP(mobileNumber: string): Promise<void>;
-  verifyOTP(mobileNumber: string, otp: string): Promise<OTPVerificationResponse>;
+  sendOTP(email: string): Promise<void>;
+  verifyOTP(email: string, otp: string): Promise<OTPVerificationResponse>;
 }
 
 export class OTPDataSource implements IOTPDataSource {
   /**
-   * Request OTP to be sent via Fast2SMS (via Vercel serverless function)
+   * Request OTP to be sent via BREVO SMTP (via Vercel serverless function)
    * OTP is generated server-side and stored in Firebase
    */
-  async sendOTP(mobileNumber: string): Promise<void> {
+  async sendOTP(email: string): Promise<void> {
     try {
-      console.log('OTPDataSource: Sending OTP to:', mobileNumber);
+      console.log('OTPDataSource: Sending OTP to:', email);
       
       const response = await fetch('/api/send-otp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ mobileNumber }),
+        body: JSON.stringify({ email }),
       });
 
       console.log('OTPDataSource: Response status:', response.status);
@@ -68,16 +68,16 @@ export class OTPDataSource implements IOTPDataSource {
   /**
    * Verify OTP via server-side verification (Vercel serverless function)
    */
-  async verifyOTP(mobileNumber: string, otp: string): Promise<OTPVerificationResponse> {
+  async verifyOTP(email: string, otp: string): Promise<OTPVerificationResponse> {
     try {
-      console.log('OTPDataSource: Verifying OTP for:', mobileNumber);
+      console.log('OTPDataSource: Verifying OTP for:', email);
       
       const response = await fetch('/api/verify-otp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ mobileNumber, otp }),
+        body: JSON.stringify({ email, otp }),
       });
 
       const data = await response.json();
