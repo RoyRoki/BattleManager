@@ -55,8 +55,9 @@ if (!getApps().length) {
         // Try parsing as JSON
         try {
           serviceAccount = JSON.parse(serviceAccountStr);
-        } catch (parseError) {
-          console.error('send-otp: JSON parse failed:', parseError.message);
+        } catch (parseError: unknown) {
+          const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
+          console.error('send-otp: JSON parse failed:', errorMessage);
           // Try alternative: maybe the private_key has unescaped newlines that we need to keep as-is
           // Parse the JSON manually by fixing the private_key field
           try {
@@ -231,8 +232,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       try {
         smsData = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('send-otp: Failed to parse Fast2SMS response as JSON:', parseError);
+      } catch (parseError: unknown) {
+        const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
+        console.error('send-otp: Failed to parse Fast2SMS response as JSON:', errorMessage);
         console.error('send-otp: Response text:', responseText);
         throw new Error(`Invalid JSON response from Fast2SMS: ${responseText}`);
       }
