@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { firestore } from '../services/firebaseService';
 import { sendOTP, verifyOTP } from '../services/otpService';
 import { mobileSchema, otpSchema } from '../utils/validations';
+import { hashPassword, verifyPassword } from '../utils/encryptCredentials';
 import toast from 'react-hot-toast';
 
 interface SignupData {
   name: string;
   ff_id: string;
   mobileNumber: string;
+  password?: string; // Optional password for signup
 }
 
 interface OTPState {
@@ -16,6 +18,7 @@ interface OTPState {
   isVerified: boolean;
   isLoading: boolean;
   isLoadingVerification: boolean;
+  isLoadingPassword: boolean;
 }
 
 export const useOTP = () => {
@@ -24,6 +27,7 @@ export const useOTP = () => {
     isVerified: false,
     isLoading: false,
     isLoadingVerification: false,
+    isLoadingPassword: false,
   });
 
   const sendOTPCode = async (mobileNumber: string): Promise<boolean> => {
@@ -95,6 +99,9 @@ export const useOTP = () => {
             return false;
           }
 
+          // Hash password if provided
+          const passwordHash = signupData.password ? hashPassword(signupData.password) : undefined;
+
           await setDoc(userRef, {
             mobile_no: mobileNumber,
             name: signupData.name,
@@ -104,6 +111,7 @@ export const useOTP = () => {
             created_at: new Date(),
             updated_at: new Date(),
             is_active: true,
+            ...(passwordHash && { password_hash: passwordHash }),
           });
 
           toast.success('Account created successfully!');
@@ -258,12 +266,129 @@ export const useOTP = () => {
     throw lastError || new Error('Failed to check user after retries');
   };
 
+  const loginWithPassword = async (mobileNumber: string, password: string): Promise<boolean> => {
+    try {
+      mobileSchema.parse(mobileNumber);
+
+      setOtpState((prev) => ({ ...prev, isLoadingPassword: true }));
+
+      // Get user document
+      const userRef = doc(firestore, 'users', mobileNumber);
+      const userDoc = await getDoc(userRef);
+
+      if (!userDoc.exists()) {
+        toast.error('User not found. Please sign up first.');
+        setOtpState((prev) => ({ ...prev, isLoadingPassword: false }));
+        return false;
+      }
+
+      const userData = userDoc.data();
+      const storedHash = userData.password_hash;
+
+      if (!storedHash) {
+        toast.error('Password not set. Please use OTP login or reset password.');
+        setOtpState((prev) => ({ ...prev, isLoadingPassword: false }));
+        return false;
+      }
+
+      // Verify password
+      const isValid = verifyPassword(password, storedHash);
+
+      setOtpState((prev) => ({ ...prev, isLoadingPassword: false }));
+
+      if (isValid) {
+        toast.success('Login successful!');
+        return true;
+      } else {
+        toast.error('Incorrect password. Please try again.');
+        return false;
+      }
+    } catch (error: any) {
+      console.error('Error in password login:', error);
+      toast.error(error.message || 'Failed to login with password');
+      setOtpState((prev) => ({ ...prev, isLoadingPassword: false }));
+      return false;
+    }
+  };
+
+  const resetPassword = async (
+    mobileNumber: string,
+    otp: string,
+    newPassword: string,
+    skipOTPVerification: boolean = false
+  ): Promise<boolean> => {
+    try {
+      mobileSchema.parse(mobileNumber);
+
+      setOtpState((prev) => ({ ...prev, isLoadingPassword: true }));
+
+      // Verify OTP unless already verified
+      if (!skipOTPVerification) {
+        otpSchema.parse(otp);
+        const result = await verifyOTP(mobileNumber, otp);
+
+        if (!result.success) {
+          setOtpState((prev) => ({
+            ...prev,
+            isLoadingPassword: false,
+            attempts: prev.attempts + 1,
+          }));
+
+          if (result.remainingAttempts !== undefined && result.remainingAttempts > 0) {
+            toast.error(
+              result.error || `Invalid OTP. ${result.remainingAttempts} attempts remaining.`
+            );
+          } else {
+            toast.error(result.error || 'Maximum attempts exceeded. Please request a new OTP.');
+          }
+
+          return false;
+        }
+      }
+
+      // OTP verified (or skipped) - now update password
+      const userRef = doc(firestore, 'users', mobileNumber);
+      const userDoc = await getDoc(userRef);
+
+      if (!userDoc.exists()) {
+        toast.error('User not found.');
+        setOtpState((prev) => ({ ...prev, isLoadingPassword: false }));
+        return false;
+      }
+
+      // Hash new password
+      const passwordHash = hashPassword(newPassword);
+
+      // Update password hash
+      await updateDoc(userRef, {
+        password_hash: passwordHash,
+        updated_at: new Date(),
+      });
+
+      setOtpState((prev) => ({
+        ...prev,
+        isLoadingPassword: false,
+        isVerified: true,
+        attempts: 0,
+      }));
+
+      toast.success('Password reset successfully!');
+      return true;
+    } catch (error: any) {
+      console.error('Error resetting password:', error);
+      toast.error(error.message || 'Failed to reset password');
+      setOtpState((prev) => ({ ...prev, isLoadingPassword: false }));
+      return false;
+    }
+  };
+
   const resetOTP = () => {
     setOtpState({
       attempts: 0,
       isVerified: false,
       isLoading: false,
       isLoadingVerification: false,
+      isLoadingPassword: false,
     });
   };
 
@@ -272,6 +397,8 @@ export const useOTP = () => {
     sendOTPCode,
     verifyOTPCode,
     checkUserExists,
+    loginWithPassword,
+    resetPassword,
     resetOTP,
   };
 };

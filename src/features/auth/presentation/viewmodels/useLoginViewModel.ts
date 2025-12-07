@@ -1,115 +1,112 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useOTP } from '../../../../hooks/useOTP';
 import { useAuth } from '../../../../contexts/AuthContext';
-import { SendOTPUseCase } from '../../domain/usecases/SendOTPUseCase';
-import { VerifyOTPUseCase } from '../../domain/usecases/VerifyOTPUseCase';
-import { CheckUserExistsUseCase } from '../../domain/usecases/CheckUserExistsUseCase';
-import { createAuthRepository } from '../../data/repositories/AuthRepositoryFactory';
-import { SignupData } from '../../domain/entities/User';
-import { mobileSchema, userNameSchema, ffIdSchema } from '../../../../utils/validations';
+import { mobileSchema, userNameSchema, ffIdSchema, passwordSchema, otpSchema } from '../../../../utils/validations';
+import { verifyOTP } from '../../../../services/otpService';
 import toast from 'react-hot-toast';
 
-export type LoginStep = 'mobile' | 'signup' | 'otp' | 'admin';
+type LoginStep = 'mobile' | 'login' | 'signup' | 'otp' | 'forgot_password' | 'reset_password';
+type FlowType = 'login' | 'signup' | 'forgot_password';
 
-export interface LoginViewModelState {
-  step: LoginStep;
+interface SignupData {
+  name: string;
+  ff_id: string;
   mobileNumber: string;
+  password?: string;
+}
+
+export interface UseLoginViewModelReturn {
+  // State
+  mobileNumber: string;
+  step: LoginStep;
   enteredOTP: string;
   name: string;
   ffId: string;
+  password: string;
+  confirmPassword: string;
+  newPassword: string;
+  confirmNewPassword: string;
   isNewUser: boolean;
-  isLoading: boolean;
   isCheckingUser: boolean;
+  isLoading: boolean;
   isLoadingVerification: boolean;
+  isLoadingPassword: boolean;
   attempts: number;
-  isAdminMode: boolean;
-  adminEmail: string;
-  adminPassword: string;
-  isAdminLoading: boolean;
-}
+  flowType: FlowType;
 
-export interface LoginViewModelHandlers {
+  // Actions
   setMobileNumber: (value: string) => void;
   setEnteredOTP: (value: string) => void;
   setName: (value: string) => void;
   setFfId: (value: string) => void;
-  setAdminEmail: (value: string) => void;
-  setAdminPassword: (value: string) => void;
-  toggleAdminMode: () => void;
+  setPassword: (value: string) => void;
+  setConfirmPassword: (value: string) => void;
+  setNewPassword: (value: string) => void;
+  setConfirmNewPassword: (value: string) => void;
   handleMobileSubmit: (e?: React.FormEvent) => Promise<void>;
+  handlePasswordLogin: (e: React.FormEvent) => Promise<void>;
   handleSignupSubmit: (e: React.FormEvent) => Promise<void>;
   handleOTPSubmit: (e: React.FormEvent) => Promise<void>;
-  handleAdminLogin: (e: React.FormEvent) => Promise<void>;
+  handleForgotPassword: () => Promise<void>;
+  handleResetPassword: (e: React.FormEvent) => Promise<void>;
   handleBack: () => void;
-  reset: () => void;
 }
 
-export const useLoginViewModel = (): LoginViewModelState & LoginViewModelHandlers => {
+export const useLoginViewModel = (): UseLoginViewModelReturn => {
   const navigate = useNavigate();
-  const { login, adminLogin } = useAuth();
-
-  // Initialize repository and use cases using factory
-  // Using useMemo to avoid recreating on every render
-  const authRepository = useMemo(() => createAuthRepository(), []);
-  const sendOTPUseCase = useMemo(() => new SendOTPUseCase(authRepository), [authRepository]);
-  const verifyOTPUseCase = useMemo(() => new VerifyOTPUseCase(authRepository), [authRepository]);
-  const checkUserExistsUseCase = useMemo(() => new CheckUserExistsUseCase(authRepository), [authRepository]);
-
-  // UI State
-  const [step, setStep] = useState<LoginStep>('mobile');
+  const { login } = useAuth();
   const [mobileNumber, setMobileNumber] = useState('');
+  const [step, setStep] = useState<LoginStep>('mobile');
   const [enteredOTP, setEnteredOTP] = useState('');
   const [name, setName] = useState('');
   const [ffId, setFfId] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [isNewUser, setIsNewUser] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [isCheckingUser, setIsCheckingUser] = useState(false);
-  const [isLoadingVerification, setIsLoadingVerification] = useState(false);
-  const [attempts, setAttempts] = useState(0);
-  const [isAdminMode, setIsAdminMode] = useState(false);
-  const [adminEmail, setAdminEmail] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [isAdminLoading, setIsAdminLoading] = useState(false);
+  const [flowType, setFlowType] = useState<FlowType>('login');
+
+  const {
+    sendOTPCode,
+    verifyOTPCode,
+    checkUserExists,
+    loginWithPassword,
+    resetPassword,
+    isLoading,
+    isLoadingVerification,
+    isLoadingPassword,
+    attempts,
+    resetOTP,
+  } = useOTP();
 
   const handleMobileSubmit = useCallback(async (e?: React.FormEvent) => {
     if (e) {
       e.preventDefault();
     }
 
-    console.log('useLoginViewModel: handleMobileSubmit called', { mobileNumber, isLoading, step });
-
-    // Validate mobile number length before proceeding
     if (mobileNumber.length !== 10) {
-      console.warn('useLoginViewModel: Mobile number validation failed: length is', mobileNumber.length);
       toast.error('Please enter a valid 10-digit mobile number');
       return;
     }
 
     if (isLoading || isCheckingUser) {
-      console.warn('useLoginViewModel: Already processing OTP request');
       return;
     }
 
-    // Set loading state immediately
     setIsCheckingUser(true);
 
     try {
-      console.log('useLoginViewModel: Validating mobile number with schema');
       mobileSchema.parse(mobileNumber);
 
-      console.log('useLoginViewModel: Checking if user exists');
-      // Check if user exists - handle errors properly
       let userExists = false;
       try {
-        userExists = await checkUserExistsUseCase.execute(mobileNumber);
-        console.log('useLoginViewModel: User exists check completed:', userExists);
+        userExists = await checkUserExists(mobileNumber);
       } catch (checkError: any) {
-        console.error('useLoginViewModel: Error checking user existence:', checkError);
-        // If check fails due to network/timeout, show error and don't proceed
-        // This prevents existing users from being shown signup screen
         const errorMessage = checkError.message || 'Failed to check user. Please try again.';
-        
-        // Check if it's a network/timeout error
+
         if (
           errorMessage.includes('timeout') ||
           errorMessage.includes('connection') ||
@@ -121,203 +118,238 @@ export const useLoginViewModel = (): LoginViewModelState & LoginViewModelHandler
         } else {
           toast.error(errorMessage);
         }
-        
-        // Don't proceed with OTP if we can't check user existence
-        // User should retry after fixing connection
+
         setIsCheckingUser(false);
-        setIsLoading(false);
         return;
       }
 
       setIsNewUser(!userExists);
-      console.log('useLoginViewModel: isNewUser set to:', !userExists);
+      setFlowType(userExists ? 'login' : 'signup');
 
-      // Clear checking state before starting OTP send
-      setIsCheckingUser(false);
-
-      console.log('useLoginViewModel: Sending OTP code');
-      setIsLoading(true);
-      try {
-        await sendOTPUseCase.execute(mobileNumber);
-        console.log('useLoginViewModel: OTP sent successfully');
-        toast.success('OTP sent successfully!');
-
-        // If new user, show signup form, otherwise go to OTP
-        const nextStep = userExists ? 'otp' : 'signup';
-        console.log('useLoginViewModel: Moving to step:', nextStep);
-        setStep(nextStep);
-      } catch (error: any) {
-        console.error('useLoginViewModel: Error sending OTP:', error);
-        toast.error(error.message || 'Failed to send OTP. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
-    } catch (error: any) {
-      console.error('useLoginViewModel: Error in handleMobileSubmit:', error);
-      console.error('useLoginViewModel: Error stack:', error.stack);
-      toast.error(error.message || 'Invalid mobile number');
-      setIsCheckingUser(false);
-      setIsLoading(false);
-    } finally {
-      // Ensure checking state is always cleared
-      setIsCheckingUser(false);
-    }
-  }, [mobileNumber, isLoading, isCheckingUser, step, sendOTPUseCase, checkUserExistsUseCase]);
-
-  const handleSignupSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('useLoginViewModel: handleSignupSubmit called', { name, ffId });
-
-    try {
-      userNameSchema.parse(name);
-      ffIdSchema.parse(ffId);
-
-      console.log('useLoginViewModel: Signup validation passed, moving to OTP step');
-      setStep('otp');
-    } catch (error: any) {
-      console.error('useLoginViewModel: Error in handleSignupSubmit:', error);
-      toast.error(error.message || 'Please check your input');
-    }
-  }, [name, ffId]);
-
-  const handleOTPSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('useLoginViewModel: handleOTPSubmit called', { enteredOTP, mobileNumber, isNewUser });
-
-    const signupData: SignupData | undefined = isNewUser
-      ? { name, ff_id: ffId, mobileNumber }
-      : undefined;
-
-    setIsLoadingVerification(true);
-    try {
-      const result = await verifyOTPUseCase.execute(mobileNumber, enteredOTP, signupData);
-      console.log('useLoginViewModel: OTP verification result:', result);
-
-      if (result.success) {
-        console.log('useLoginViewModel: OTP verified, logging in user');
-        await login(mobileNumber);
-        navigate('/');
-        // Reset form will be handled by reset function
-        reset();
+      if (userExists) {
+        // Existing user - go to password login
+        setStep('login');
       } else {
-        // Handle OTP verification failure
-        setAttempts((prev) => prev + 1);
-        if (result.remainingAttempts !== undefined && result.remainingAttempts > 0) {
-          toast.error(result.error || `Invalid OTP. ${result.remainingAttempts} attempts remaining.`);
+        // New user - send OTP and go to signup
+        const success = await sendOTPCode(mobileNumber);
+        if (success) {
+          setStep('signup');
         } else {
-          toast.error(result.error || 'Maximum attempts exceeded. Please request a new OTP.');
-          setAttempts(0);
+          toast.error('Failed to send OTP. Please try again.');
         }
       }
     } catch (error: any) {
-      console.error('useLoginViewModel: Error in handleOTPSubmit:', error);
-      toast.error(error.message || 'Failed to verify OTP');
-      setAttempts((prev) => prev + 1);
+      toast.error(error.message || 'Invalid mobile number');
     } finally {
-      setIsLoadingVerification(false);
+      setIsCheckingUser(false);
     }
-  }, [enteredOTP, mobileNumber, isNewUser, name, ffId, verifyOTPUseCase, login, navigate]);
+  }, [mobileNumber, isLoading, isCheckingUser, checkUserExists, sendOTPCode]);
 
-  const toggleAdminMode = useCallback(() => {
-    setIsAdminMode((prev) => !prev);
-    if (!isAdminMode) {
-      setStep('admin');
-    } else {
-      setStep('mobile');
-      setAdminEmail('');
-      setAdminPassword('');
-    }
-  }, [isAdminMode]);
-
-  const handleAdminLogin = useCallback(async (e: React.FormEvent) => {
+  const handlePasswordLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('useLoginViewModel: handleAdminLogin called');
+    try {
+      if (!password) {
+        toast.error('Please enter your password');
+        return;
+      }
 
-    if (!adminEmail || !adminPassword) {
-      toast.error('Please enter both email and password');
+      const success = await loginWithPassword(mobileNumber, password);
+      if (success) {
+        await login(mobileNumber);
+        navigate('/');
+        // Reset form
+        setMobileNumber('');
+        setPassword('');
+        setStep('mobile');
+        resetOTP();
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to login');
+    }
+  }, [mobileNumber, password, loginWithPassword, login, navigate, resetOTP]);
+
+  const handleSignupSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      userNameSchema.parse(name);
+      ffIdSchema.parse(ffId);
+      passwordSchema.parse(password);
+      
+      if (password !== confirmPassword) {
+        toast.error('Passwords do not match');
+        return;
+      }
+
+      setStep('otp');
+    } catch (error: any) {
+      toast.error(error.message || 'Please check your input');
+    }
+  }, [name, ffId, password, confirmPassword]);
+
+  const handleOTPSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // For forgot password flow, verify OTP directly without creating/updating user
+    if (flowType === 'forgot_password') {
+      try {
+        otpSchema.parse(enteredOTP);
+        const result = await verifyOTP(mobileNumber, enteredOTP);
+        
+        if (result.success) {
+          setStep('reset_password');
+        } else {
+          if (result.remainingAttempts !== undefined && result.remainingAttempts > 0) {
+            toast.error(
+              result.error || `Invalid OTP. ${result.remainingAttempts} attempts remaining.`
+            );
+          } else {
+            toast.error(result.error || 'Maximum attempts exceeded. Please request a new OTP.');
+          }
+        }
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to verify OTP');
+      }
       return;
     }
 
-    setIsAdminLoading(true);
+    const signupData: SignupData | undefined = isNewUser
+      ? { name, ff_id: ffId, mobileNumber, password }
+      : undefined;
+
     try {
-      await adminLogin(adminEmail, adminPassword);
-      console.log('useLoginViewModel: Admin login successful');
-      toast.success('Admin login successful!');
-      navigate('/admin');
-      reset();
+      const success = await verifyOTPCode(enteredOTP, mobileNumber, signupData);
+
+      if (success) {
+        await login(mobileNumber);
+        navigate('/');
+        // Reset form
+        setMobileNumber('');
+        setEnteredOTP('');
+        setName('');
+        setFfId('');
+        setPassword('');
+        setConfirmPassword('');
+        setStep('mobile');
+        setIsNewUser(false);
+        setFlowType('login');
+        resetOTP();
+      }
     } catch (error: any) {
-      console.error('useLoginViewModel: Admin login error:', error);
-      toast.error(error.message || 'Admin login failed. Please check your credentials.');
-    } finally {
-      setIsAdminLoading(false);
+      toast.error(error.message || 'Failed to verify OTP');
     }
-  }, [adminEmail, adminPassword, adminLogin, navigate]);
+  }, [isNewUser, name, ffId, mobileNumber, password, enteredOTP, flowType, verifyOTPCode, login, navigate, resetOTP]);
+
+  const handleForgotPassword = useCallback(async () => {
+    try {
+      if (!mobileNumber || mobileNumber.length !== 10) {
+        toast.error('Please enter your mobile number first');
+        return;
+      }
+
+      mobileSchema.parse(mobileNumber);
+      setFlowType('forgot_password');
+      const success = await sendOTPCode(mobileNumber);
+      
+      if (success) {
+        setStep('otp');
+      } else {
+        toast.error('Failed to send OTP. Please try again.');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to send OTP');
+    }
+  }, [mobileNumber, sendOTPCode]);
+
+  const handleResetPassword = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      passwordSchema.parse(newPassword);
+      
+      if (newPassword !== confirmNewPassword) {
+        toast.error('Passwords do not match');
+        return;
+      }
+
+      // OTP is already verified in handleOTPSubmit, so skip verification
+      const success = await resetPassword(mobileNumber, enteredOTP, newPassword, true);
+      
+      if (success) {
+        toast.success('Password reset successfully! You can now login with your new password.');
+        // Reset form and go back to login
+        setMobileNumber('');
+        setEnteredOTP('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setStep('mobile');
+        setFlowType('login');
+        resetOTP();
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to reset password');
+    }
+  }, [mobileNumber, enteredOTP, newPassword, confirmNewPassword, resetPassword, resetOTP]);
 
   const handleBack = useCallback(() => {
     if (step === 'signup') {
       setStep('mobile');
       setName('');
       setFfId('');
-    } else if (step === 'admin') {
+      setPassword('');
+      setConfirmPassword('');
+    } else if (step === 'login') {
       setStep('mobile');
-      setAdminEmail('');
-      setAdminPassword('');
-      setIsAdminMode(false);
+      setPassword('');
+    } else if (step === 'otp' && flowType === 'forgot_password') {
+      // After OTP verification in forgot password flow, go to reset password
+      setStep('reset_password');
+    } else if (step === 'reset_password') {
+      setStep('mobile');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setEnteredOTP('');
+      setFlowType('login');
+      resetOTP();
     } else {
       setStep('mobile');
       setEnteredOTP('');
-      setAttempts(0);
-      setIsLoadingVerification(false); // Clear verifying state when going back
+      resetOTP();
     }
-  }, [step]);
-
-  const reset = useCallback(() => {
-    setMobileNumber('');
-    setEnteredOTP('');
-    setName('');
-    setFfId('');
-    setStep('mobile');
-    setIsNewUser(false);
-    setAttempts(0);
-    setIsLoading(false);
-    setIsCheckingUser(false);
-    setIsLoadingVerification(false);
-    setIsAdminMode(false);
-    setAdminEmail('');
-    setAdminPassword('');
-    setIsAdminLoading(false);
-  }, []);
+  }, [step, flowType, resetOTP]);
 
   return {
     // State
-    step,
     mobileNumber,
+    step,
     enteredOTP,
     name,
     ffId,
+    password,
+    confirmPassword,
+    newPassword,
+    confirmNewPassword,
     isNewUser,
-    isLoading,
     isCheckingUser,
+    isLoading,
     isLoadingVerification,
+    isLoadingPassword,
     attempts,
-    isAdminMode,
-    adminEmail,
-    adminPassword,
-    isAdminLoading,
-    // Handlers
+    flowType,
+
+    // Actions
     setMobileNumber,
     setEnteredOTP,
     setName,
     setFfId,
-    setAdminEmail,
-    setAdminPassword,
-    toggleAdminMode,
+    setPassword,
+    setConfirmPassword,
+    setNewPassword,
+    setConfirmNewPassword,
     handleMobileSubmit,
+    handlePasswordLogin,
     handleSignupSubmit,
     handleOTPSubmit,
-    handleAdminLogin,
+    handleForgotPassword,
+    handleResetPassword,
     handleBack,
-    reset,
   };
 };
-

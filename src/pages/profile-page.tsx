@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { usePoints } from '../contexts/PointsContext';
 import { OTPModal } from '../components/otp-modal';
 import { motion } from 'framer-motion';
-import { HiUser, HiArrowLeft } from 'react-icons/hi';
+import { HiUser } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 
 export const ProfilePage: React.FC = () => {
-  const navigate = useNavigate();
   const { user, logout, isAdmin } = useAuth();
   const { points } = usePoints();
   const [showOTPModal, setShowOTPModal] = useState(false);
@@ -42,17 +40,6 @@ export const ProfilePage: React.FC = () => {
   return (
     <div className="min-h-screen bg-bg pb-20">
       <div className="container mx-auto px-4 py-6">
-        {/* Back Button */}
-        <motion.button
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          onClick={() => navigate(-1)}
-          className="flex items-center justify-center w-10 h-10 rounded-full bg-bg-secondary border border-gray-800 hover:border-primary transition-colors mb-6"
-          aria-label="Go back"
-        >
-          <HiArrowLeft className="text-xl text-primary" />
-        </motion.button>
-
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}

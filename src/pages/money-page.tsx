@@ -4,6 +4,7 @@ import { collection, query, where, addDoc } from 'firebase/firestore';
 import { firestore } from '../services/firebaseService';
 import { useAuth } from '../contexts/AuthContext';
 import { usePoints } from '../contexts/PointsContext';
+import { generateAddMoneyUPIString } from '../services/upiService';
 import { withdrawalSchema } from '../utils/validations';
 import { MIN_WITHDRAW, PRESET_WITHDRAWAL_AMOUNTS } from '../utils/constants';
 import { useAppSettings } from '../hooks/useAppSettings';
@@ -66,7 +67,10 @@ export const MoneyPage: React.FC = () => {
       });
 
       // Generate UPI payment link and open payment app
-      const upiString = `upi://pay?pa=rokiroy2207@oksbi&pn=Roki%20Roy&am=${selectedAmount}&tn=BattleManager%20Add%20${selectedAmount}%20Points&cu=INR`;
+      const upiString = generateAddMoneyUPIString(
+        selectedAmount,
+        `Add ${selectedAmount} Points - ${user.mobile_no}`
+      );
 
       // Open UPI payment app
       window.location.href = upiString;

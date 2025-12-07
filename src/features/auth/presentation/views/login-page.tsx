@@ -1,55 +1,62 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
-import { HiShieldCheck, HiPhone, HiKey, HiUser, HiIdentification, HiMail } from 'react-icons/hi';
 import { useLoginViewModel } from '../viewmodels/useLoginViewModel';
+import { HiPhone, HiKey, HiUser, HiIdentification, HiLockClosed } from 'react-icons/hi';
 
 export const LoginPage: React.FC = () => {
   const {
-    step,
+    // State
     mobileNumber,
+    step,
     enteredOTP,
     name,
     ffId,
-    isLoading,
+    password,
+    confirmPassword,
+    newPassword,
+    confirmNewPassword,
     isCheckingUser,
+    isLoading,
     isLoadingVerification,
+    isLoadingPassword,
     attempts,
-    isAdminMode,
-    adminEmail,
-    adminPassword,
-    isAdminLoading,
+    flowType,
+
+    // Actions
     setMobileNumber,
     setEnteredOTP,
     setName,
     setFfId,
-    setAdminEmail,
-    setAdminPassword,
-    toggleAdminMode,
+    setPassword,
+    setConfirmPassword,
+    setNewPassword,
+    setConfirmNewPassword,
     handleMobileSubmit,
+    handlePasswordLogin,
     handleSignupSubmit,
     handleOTPSubmit,
-    handleAdminLogin,
+    handleForgotPassword,
+    handleResetPassword,
     handleBack,
   } = useLoginViewModel();
 
-  // Debug: Track button state changes
-  useEffect(() => {
-    if (step === 'mobile') {
-      const isButtonDisabled = isLoading || isCheckingUser || mobileNumber.length !== 10;
-      console.log('Send OTP button state:', {
-        isLoading,
-        isCheckingUser,
-        mobileNumberLength: mobileNumber.length,
-        isButtonDisabled,
-        mobileNumber,
-      });
+  const getStepTitle = () => {
+    switch (step) {
+      case 'mobile':
+        return 'Enter your mobile number to get started';
+      case 'login':
+        return 'Enter your password to login';
+      case 'signup':
+        return 'Create your account';
+      case 'otp':
+        return flowType === 'forgot_password'
+          ? 'Verify OTP to reset password'
+          : 'Enter the OTP sent to your mobile';
+      case 'reset_password':
+        return 'Set your new password';
+      default:
+        return 'Welcome to BattleManager';
     }
-  }, [step, isLoading, isCheckingUser, mobileNumber]);
-
-  const handleSendOTPClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    console.log('Button clicked directly');
-    handleMobileSubmit();
   };
 
   return (
@@ -68,47 +75,21 @@ export const LoginPage: React.FC = () => {
               transition={{ delay: 0.2, type: 'spring' }}
               className="inline-block mb-4"
             >
-              <div className="w-20 h-20 rounded-full flex items-center justify-center border-2 border-primary">
-                <HiShieldCheck className="text-4xl text-primary" />
-              </div>
+              <img
+                src="/applogo.png"
+                alt="BattleManager Logo"
+                className="w-20 h-20 rounded-lg object-contain mx-auto"
+              />
             </motion.div>
             <h1 className="text-3xl font-heading text-primary mb-2 text-glow">
               BattleManager
             </h1>
-            <p className="text-gray-400">
-              {step === 'mobile'
-                ? 'Enter your mobile number to get started'
-                : step === 'signup'
-                ? 'Create your account'
-                : step === 'admin'
-                ? 'Admin Login'
-                : 'Enter the OTP sent to your mobile'}
-            </p>
+            <p className="text-gray-400">{getStepTitle()}</p>
           </div>
-
-          {/* Admin/User Mode Toggle */}
-          {step === 'mobile' && (
-            <div className="mb-6 flex items-center justify-center">
-              <button
-                type="button"
-                onClick={toggleAdminMode}
-                className="text-xs text-gray-400 hover:text-primary transition"
-              >
-                {isAdminMode ? 'Switch to User Login' : 'Admin Login'}
-              </button>
-            </div>
-          )}
 
           {/* Mobile Number Form */}
           {step === 'mobile' && (
-            <form
-              onSubmit={(e) => {
-                console.log('Form onSubmit triggered');
-                handleMobileSubmit(e);
-              }}
-              className="space-y-6"
-              noValidate
-            >
+            <form onSubmit={handleMobileSubmit} className="space-y-6" noValidate>
               <div>
                 <label className="block text-sm font-body text-gray-300 mb-2">
                   Mobile Number
@@ -131,10 +112,9 @@ export const LoginPage: React.FC = () => {
 
               <button
                 type="submit"
-                onClick={handleSendOTPClick}
                 disabled={isLoading || isCheckingUser || mobileNumber.length !== 10}
                 className="w-full bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                aria-label="Send OTP"
+                aria-label="Continue"
               >
                 {isLoading || isCheckingUser ? (
                   <>
@@ -144,10 +124,72 @@ export const LoginPage: React.FC = () => {
                 ) : (
                   <>
                     <HiKey className="text-xl" />
-                    Send OTP
+                    Continue
                   </>
                 )}
               </button>
+            </form>
+          )}
+
+          {/* Password Login Form (for existing users) */}
+          {step === 'login' && (
+            <form onSubmit={handlePasswordLogin} className="space-y-6">
+              <div>
+                <label className="block text-sm font-body text-gray-300 mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <HiLockClosed className="text-gray-400" />
+                  </div>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full bg-bg border border-gray-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-primary transition font-body"
+                    required
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="bg-bg-tertiary border border-primary border-opacity-30 rounded-lg p-3">
+                <p className="text-xs text-gray-400">
+                  Mobile: <span className="text-primary">{mobileNumber}</span>
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  type="submit"
+                  disabled={isLoadingPassword || !password}
+                  className="w-full bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isLoadingPassword ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      Logging in...
+                    </>
+                  ) : (
+                    'Login'
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="w-full text-sm text-primary hover:text-primary/80 transition font-body"
+                >
+                  Forgot Password?
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="w-full bg-bg-tertiary text-white py-3 rounded-lg font-body hover:bg-opacity-80 transition"
+                >
+                  Back
+                </button>
+              </div>
             </form>
           )}
 
@@ -195,6 +237,47 @@ export const LoginPage: React.FC = () => {
                 </p>
               </div>
 
+              <div>
+                <label className="block text-sm font-body text-gray-300 mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <HiLockClosed className="text-gray-400" />
+                  </div>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter password"
+                    className="w-full bg-bg border border-gray-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-primary transition font-body"
+                    required
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Min 8 chars, uppercase, lowercase, and number required
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-body text-gray-300 mb-2">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <HiLockClosed className="text-gray-400" />
+                  </div>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm password"
+                    className="w-full bg-bg border border-gray-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-primary transition font-body"
+                    required
+                  />
+                </div>
+              </div>
+
               <div className="bg-bg-tertiary border border-primary border-opacity-30 rounded-lg p-3">
                 <p className="text-xs text-gray-400">
                   Mobile: <span className="text-primary">{mobileNumber}</span>
@@ -211,7 +294,7 @@ export const LoginPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={!name.trim() || !ffId.trim()}
+                  disabled={!name.trim() || !ffId.trim() || !password || !confirmPassword}
                   className="flex-1 bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continue to OTP
@@ -236,11 +319,10 @@ export const LoginPage: React.FC = () => {
                     value={enteredOTP}
                     onChange={(e) => setEnteredOTP(e.target.value.replace(/\D/g, ''))}
                     placeholder="Enter 6-digit OTP"
-                    className="w-full bg-bg border border-gray-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-primary transition font-body text-center text-2xl tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full bg-bg border border-gray-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-primary transition font-body text-center text-2xl tracking-widest"
                     maxLength={6}
                     required
                     autoFocus
-                    disabled={isLoadingVerification}
                   />
                 </div>
                 {attempts > 0 && (
@@ -257,8 +339,7 @@ export const LoginPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleBack}
-                  disabled={isLoadingVerification}
-                  className="flex-1 bg-bg-tertiary text-white py-3 rounded-lg font-body hover:bg-opacity-80 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-bg-tertiary text-white py-3 rounded-lg font-body hover:bg-opacity-80 transition"
                 >
                   Back
                 </button>
@@ -267,79 +348,90 @@ export const LoginPage: React.FC = () => {
                   disabled={isLoadingVerification || enteredOTP.length !== 6}
                   className="flex-1 bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isLoadingVerification ? 'Verifying...' : 'Verify & Login'}
+                  {isLoadingVerification
+                    ? 'Verifying...'
+                    : flowType === 'forgot_password'
+                    ? 'Verify OTP'
+                    : 'Verify & Login'}
                 </button>
               </div>
             </form>
           )}
 
-          {/* Admin Login Form */}
-          {step === 'admin' && (
-            <form onSubmit={handleAdminLogin} className="space-y-6">
+          {/* Reset Password Form */}
+          {step === 'reset_password' && (
+            <form onSubmit={handleResetPassword} className="space-y-6">
               <div>
                 <label className="block text-sm font-body text-gray-300 mb-2">
-                  Email
+                  New Password
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <HiMail className="text-gray-400" />
+                    <HiLockClosed className="text-gray-400" />
                   </div>
                   <input
-                    type="email"
-                    value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
-                    placeholder="admin@example.com"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new password"
                     className="w-full bg-bg border border-gray-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-primary transition font-body"
                     required
                     autoFocus
                   />
                 </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Min 8 chars, uppercase, lowercase, and number required
+                </p>
               </div>
 
               <div>
                 <label className="block text-sm font-body text-gray-300 mb-2">
-                  Password
+                  Confirm New Password
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <HiKey className="text-gray-400" />
+                    <HiLockClosed className="text-gray-400" />
                   </div>
                   <input
                     type="password"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    placeholder="Enter your password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    placeholder="Confirm new password"
                     className="w-full bg-bg border border-gray-700 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-primary transition font-body"
                     required
                   />
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={isAdminLoading || !adminEmail || !adminPassword}
-                className="w-full bg-accent text-white py-3 rounded-lg font-heading hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isAdminLoading ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Logging in...
-                  </>
-                ) : (
-                  <>
-                    <HiShieldCheck className="text-xl" />
-                    Login as Admin
-                  </>
-                )}
-              </button>
+              <div className="bg-bg-tertiary border border-primary border-opacity-30 rounded-lg p-3">
+                <p className="text-xs text-gray-400">
+                  Mobile: <span className="text-primary">{mobileNumber}</span>
+                </p>
+              </div>
 
-              <button
-                type="button"
-                onClick={handleBack}
-                className="w-full bg-bg-tertiary text-white py-3 rounded-lg font-body hover:bg-opacity-80 transition"
-              >
-                Back to User Login
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="flex-1 bg-bg-tertiary text-white py-3 rounded-lg font-body hover:bg-opacity-80 transition"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoadingPassword || !newPassword || !confirmNewPassword}
+                  className="flex-1 bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isLoadingPassword ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      Resetting...
+                    </>
+                  ) : (
+                    'Reset Password'
+                  )}
+                </button>
+              </div>
             </form>
           )}
 
@@ -354,4 +446,3 @@ export const LoginPage: React.FC = () => {
     </div>
   );
 };
-

@@ -14,7 +14,7 @@ export default {
         'bg-tertiary': '#2A2A2A',
       },
       fontFamily: {
-        heading: ['Orbitron', 'sans-serif'],
+        heading: ['Inter', 'sans-serif'],
         body: ['Roboto', 'sans-serif'],
       },
       animation: {

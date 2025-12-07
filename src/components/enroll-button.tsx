@@ -41,7 +41,10 @@ export const EnrollButton: React.FC<EnrollButtonProps> = ({
   const { enroll, isEnrolling } = useEnrollTournament();
   const effectiveStatus = getEffectiveStatus(tournament);
 
-  const handleEnroll = async () => {
+  const handleEnroll = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     if (!user) {
       return;
     }
@@ -49,7 +52,10 @@ export const EnrollButton: React.FC<EnrollButtonProps> = ({
     const success = await enroll(tournament);
     if (success) {
       playEnrollSound();
-      onEnrollSuccess?.();
+      // Add a small delay to ensure enrollment completes before reload
+      setTimeout(() => {
+        onEnrollSuccess?.();
+      }, 500);
     }
   };
 
@@ -65,6 +71,7 @@ export const EnrollButton: React.FC<EnrollButtonProps> = ({
       whileHover={{ scale: canEnroll ? 1.05 : 1 }}
       whileTap={{ scale: canEnroll ? 0.95 : 1 }}
       onClick={handleEnroll}
+      onMouseDown={(e) => e.stopPropagation()}
       disabled={!canEnroll || isEnrolling}
       className={`w-full py-3 rounded-lg font-heading text-lg transition ${
         canEnroll

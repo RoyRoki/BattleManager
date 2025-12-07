@@ -13,17 +13,11 @@ import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../utils/constants';
 
 export const HomePage: React.FC = () => {
-  const { user, isLoading } = useAuth();
+  const { isLoading } = useAuth();
   const navigate = useNavigate();
   
-  // Redirect to login if not authenticated (after loading completes)
-  React.useEffect(() => {
-    if (!isLoading && !user) {
-      navigate(ROUTES.LOGIN, { replace: true });
-    }
-  }, [user, isLoading, navigate]);
-  
-  // Query all active tournaments (upcoming, live) - filter server-side, sort client-side
+  // Query only active tournaments (upcoming, live) - filter server-side to avoid loading completed tournaments
+  // This ensures we only load 3 active tournaments, not 1000+ completed ones
   const [tournaments, loading, error] = useCollection(
     query(
       collection(firestore, 'tournaments'),
@@ -31,17 +25,9 @@ export const HomePage: React.FC = () => {
     )
   ) as unknown as [{ docs: any[] } | null, boolean, Error | undefined];
 
-  // Query completed tournaments for reference
-  const [completedTournaments] = useCollection(
-    query(
-      collection(firestore, 'tournaments'),
-      where('status', '==', 'completed')
-    )
-  ) as unknown as [{ docs: any[] } | null, boolean];
-
   // Query banners - filter active banners server-side
   // Only query if firestore is initialized
-  const [banners, bannersLoading] = useCollection(
+  const [banners, bannersLoading, bannersError] = useCollection(
     firestore && import.meta.env.VITE_FIREBASE_PROJECT_ID
       ? query(
           collection(firestore, 'banners'),
@@ -78,14 +64,13 @@ export const HomePage: React.FC = () => {
       .sort((a, b) => a.order - b.order) || [];
 
   // Show loading state while checking auth or loading tournaments
-  // Also show loading if user is not authenticated (will redirect)
-  if (loading || isLoading || !user) {
+  if (loading || isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-bg">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <div className="text-primary text-xl font-heading">Loading tournaments...</div>
-        </div>
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="text-primary text-xl font-heading">Loading tournaments</div>
+          </div>
       </div>
     );
   }
@@ -104,8 +89,8 @@ export const HomePage: React.FC = () => {
 
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <div className="text-accent text-xl font-heading mb-2">Error loading tournaments</div>
-              <p className="text-gray-400">Please try again later</p>
+              <div className="text-accent text-xl font-heading mb-2">Unable to load tournaments</div>
+              <p className="text-gray-400">Please try again in a moment</p>
             </div>
           </div>
         </div>
@@ -130,17 +115,17 @@ export const HomePage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             className="text-3xl font-heading text-primary text-glow"
           >
-            Free Fire Tournaments
+            Active Tournaments
           </motion.h1>
           <motion.button
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             onClick={() => navigate(ROUTES.TOURNAMENT_HISTORY)}
-            className="flex items-center gap-2 px-4 py-2 bg-bg-secondary border border-primary/30 rounded-lg hover:border-primary transition-colors"
-            title="View Tournament History"
+            className="flex items-center gap-2 px-4 py-2 bg-bg-secondary rounded-lg transition-colors"
+            title="View Past Tournaments"
           >
             <HiClock className="w-5 h-5 text-primary" />
-            <span className="text-primary font-heading text-sm hidden sm:inline">History</span>
+            <span className="text-primary font-heading text-sm hidden sm:inline">Past Tournaments</span>
           </motion.button>
         </div>
 
@@ -184,53 +169,18 @@ export const HomePage: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
                   >
-                    <TournamentCard tournament={tournament} />
+                    <TournamentCard 
+                      tournament={tournament} 
+                      onEnrollSuccess={() => {
+                        // Wait a bit longer to ensure enrollment is saved, then refresh
+                        setTimeout(() => {
+                          window.location.reload();
+                        }, 1000);
+                      }}
+                    />
                   </motion.div>
                 ))}
             </div>
-            {completedTournaments && completedTournaments.docs.length > 0 && (
-              <div className="mt-12">
-                <h2 className="text-2xl font-heading text-gray-400 mb-4">Completed Tournaments</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {completedTournaments.docs
-                    .map((doc: any) => {
-                      const data = doc.data();
-                      return {
-                        id: doc.id,
-                        ...data,
-                        start_time:
-                          data.start_time instanceof Date
-                            ? data.start_time
-                            : (data.start_time as any)?.toDate?.() || new Date(),
-                        reveal_time:
-                          data.reveal_time instanceof Date
-                            ? data.reveal_time
-                            : (data.reveal_time as any)?.toDate?.() || undefined,
-                        created_at:
-                          data.created_at instanceof Date
-                            ? data.created_at
-                            : (data.created_at as any)?.toDate?.() || new Date(),
-                        updated_at:
-                          data.updated_at instanceof Date
-                            ? data.updated_at
-                            : (data.updated_at as any)?.toDate?.() || new Date(),
-                      } as Tournament;
-                    })
-                    .sort((a, b) => b.start_time.getTime() - a.start_time.getTime())
-                    .slice(0, 6) // Show only recent 6 completed tournaments
-                    .map((tournament, index: number) => (
-                      <motion.div
-                        key={tournament.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                      >
-                        <TournamentCard tournament={tournament} />
-                      </motion.div>
-                    ))}
-                </div>
-              </div>
-            )}
           </>
         ) : (
           <div className="text-center py-12">
@@ -239,8 +189,8 @@ export const HomePage: React.FC = () => {
                 <HiCalendar className="w-10 h-10 text-primary/60" />
               </div>
             </div>
-            <p className="text-gray-400 text-lg mb-2">No tournaments available at the moment</p>
-            <p className="text-gray-500 text-sm">Check back soon for new tournaments</p>
+            <p className="text-gray-400 text-lg mb-2">No active tournaments right now</p>
+            <p className="text-gray-500 text-sm">New tournaments will appear here soon</p>
           </div>
         )}
       </div>

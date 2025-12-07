@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { useOTP } from '../hooks/useOTP';
 import { useAuth } from '../contexts/AuthContext';
 import { mobileSchema, userNameSchema, ffIdSchema } from '../utils/validations';
-import { HiShieldCheck, HiPhone, HiKey, HiUser, HiIdentification } from 'react-icons/hi';
+import { HiPhone, HiKey, HiUser, HiIdentification } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 
 export const LoginPage: React.FC = () => {
@@ -205,9 +205,11 @@ export const LoginPage: React.FC = () => {
               transition={{ delay: 0.2, type: 'spring' }}
               className="inline-block mb-4"
             >
-              <div className="w-20 h-20 rounded-full flex items-center justify-center border-2 border-primary">
-                <HiShieldCheck className="text-4xl text-primary" />
-              </div>
+              <img
+                src="/applogo.png"
+                alt="BattleManager Logo"
+                className="w-20 h-20 rounded-lg object-contain mx-auto"
+              />
             </motion.div>
             <h1 className="text-3xl font-heading text-primary mb-2 text-glow">
               BattleManager

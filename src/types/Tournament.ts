@@ -18,14 +18,13 @@ export interface TournamentPayment {
 export interface Tournament {
   id: string;
   name: string;
-  description?: string;
   entry_amount: number;
   max_players: number;
   current_players: number;
   start_time: Date;
-  reveal_time?: Date;
+  reveal_time?: Date; // Kept for backward compatibility, but no longer actively used
   status: TournamentStatus;
-  banner_url?: string;
+  per_kill_point?: number; // Points awarded per kill
   encrypted_credentials?: string; // Legacy field - kept for backward compatibility
   ff_id_encrypted?: string;
   ff_password_encrypted?: string;

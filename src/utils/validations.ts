@@ -28,17 +28,6 @@ export const upiIdSchema = z
   .string()
   .regex(/^[\w.-]+@[\w.-]+$/, 'Invalid UPI ID format');
 
-// Bank Account Number validation (9-18 digits)
-export const bankAccountNoSchema = z
-  .string()
-  .regex(/^\d{9,18}$/, 'Bank account number must be 9-18 digits');
-
-// IFSC Code validation (11 characters: 4 letters + 0 + 6 alphanumeric)
-export const ifscCodeSchema = z
-  .string()
-  .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'Invalid IFSC code format (e.g., ABCD0123456)')
-  .transform((val) => val.toUpperCase());
-
 // Tournament name validation
 export const tournamentNameSchema = z
   .string()
@@ -50,6 +39,13 @@ export const userNameSchema = z
   .string()
   .min(2, 'Name must be at least 2 characters')
   .max(50, 'Name cannot exceed 50 characters');
+
+// Free Fire ID validation (6-20 characters, letters, numbers, and underscores only)
+export const ffIdSchema = z
+  .string()
+  .min(6, 'Free Fire ID must be at least 6 characters')
+  .max(20, 'Free Fire ID cannot exceed 20 characters')
+  .regex(/^[a-zA-Z0-9_]+$/, 'Free Fire ID can only contain letters, numbers, and underscores');
 
 // Points validation
 export const pointsSchema = z
@@ -63,36 +59,34 @@ export const chatMessageSchema = z
   .min(1, 'Message cannot be empty')
   .max(500, 'Message cannot exceed 500 characters');
 
-// Free Fire ID validation (typically 6-12 characters, alphanumeric)
-export const ffIdSchema = z
-  .string()
-  .min(6, 'Free Fire ID must be at least 6 characters')
-  .max(20, 'Free Fire ID cannot exceed 20 characters')
-  .regex(/^[a-zA-Z0-9_]+$/, 'Free Fire ID can only contain letters, numbers, and underscores');
-
 // Tournament creation schema
 export const tournamentSchema = z.object({
   name: tournamentNameSchema,
-  description: z.string().max(1000).optional(),
   entry_amount: entryAmountSchema,
   max_players: z.number().min(2).max(100),
   start_time: z.date(),
-  reveal_time: z.date().optional(),
-  banner_url: z.string().url().optional(),
+  per_kill_point: z.number().min(0).optional(),
 });
 
 // Payment creation schema
 export const paymentSchema = z.object({
   amount: paymentAmountSchema,
   upi_id: upiIdSchema.optional(),
-  proof_url: z.string().url('Invalid proof URL').optional(),
+  proof_url: z.string().url('Invalid proof URL'),
 });
 
 // Withdrawal request schema
 export const withdrawalSchema = z.object({
   amount: paymentAmountSchema,
-  bank_account_no: bankAccountNoSchema,
-  ifsc_code: ifscCodeSchema,
+  upi_id: upiIdSchema,
 });
+
+// Password validation (min 8 chars, uppercase, lowercase, number)
+export const passwordSchema = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+  .regex(/[0-9]/, 'Password must contain at least one number');
 
 

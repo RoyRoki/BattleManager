@@ -127,16 +127,6 @@ export const TournamentDetailPage: React.FC = () => {
           <h1 className="text-xl font-heading text-primary">Tournament Details</h1>
         </motion.div>
 
-        {tournament.banner_url && (
-          <motion.img
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            src={tournament.banner_url}
-            alt={tournament.name}
-            className="w-full h-64 object-cover rounded-lg mb-6"
-          />
-        )}
-
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -290,7 +280,13 @@ export const TournamentDetailPage: React.FC = () => {
             </div>
           ) : null}
 
-          <EnrollButton tournament={tournament} />
+          <EnrollButton 
+            tournament={tournament} 
+            onEnrollSuccess={() => {
+              // Refresh the page to show updated enrollment status
+              window.location.reload();
+            }}
+          />
         </motion.div>
       </div>
     </div>

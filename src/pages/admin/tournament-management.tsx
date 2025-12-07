@@ -6,40 +6,31 @@ import { Tournament, TournamentStatus, PlayerKill } from '../../types';
 import { tournamentSchema } from '../../utils/validations';
 import { encryptCredentials, decryptCredentials } from '../../utils/encryptCredentials';
 import { useFirestoreTransaction } from '../../hooks/useFirestoreTransaction';
-import { uploadImage } from '../../services/cloudinaryService';
 import { getSuggestedTournamentStatus } from '../../utils/dateUtils';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HiX, HiUsers, HiPhotograph, HiFilter, HiExclamationCircle, HiClipboardCopy, HiLink, HiChevronDown, HiCheck, HiOutlineFire, HiEye, HiEyeOff, HiSearch, HiCurrencyDollar, HiLockClosed } from 'react-icons/hi';
+import { HiX, HiUsers, HiFilter, HiExclamationCircle, HiClipboardCopy, HiLink, HiChevronDown, HiCheck, HiOutlineFire, HiEye, HiEyeOff, HiSearch, HiCurrencyDollar, HiLockClosed } from 'react-icons/hi';
 
 export const TournamentManagement: React.FC = () => {
-  const [tournaments, loading, error] = useCollection(
+  const [tournaments, loading] = useCollection(
     collection(firestore, 'tournaments')
-  ) as unknown as [{ docs: any[] } | null, boolean, Error | undefined];
-  
-  // Log errors for debugging
-  if (error) {
-    console.error('TournamentManagement: Firestore error:', error);
-  }
+  ) as unknown as [{ docs: any[] } | null, boolean];
   const [showForm, setShowForm] = useState(false);
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
   const [statusFilter, setStatusFilter] = useState<TournamentStatus | 'all'>('all');
   const [showEnrolledPlayers, setShowEnrolledPlayers] = useState<string | null>(null);
   const [showKillList, setShowKillList] = useState<Tournament | null>(null);
-  const [uploadingBanner, setUploadingBanner] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [openInlineDropdown, setOpenInlineDropdown] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
-    description: '',
     entry_amount: '',
     max_players: '',
     start_time: '',
-    reveal_time: '',
+    per_kill_point: '',
     ff_id: '',
     ff_password: '',
     status: 'upcoming' as TournamentStatus,
-    banner_url: '',
   });
   const [showPassword, setShowPassword] = useState(false);
 
@@ -48,51 +39,68 @@ export const TournamentManagement: React.FC = () => {
     try {
       const tournamentData = tournamentSchema.parse({
         name: formData.name,
-        description: formData.description || undefined,
         entry_amount: parseFloat(formData.entry_amount),
         max_players: parseInt(formData.max_players),
         start_time: new Date(formData.start_time),
-        reveal_time: formData.reveal_time ? new Date(formData.reveal_time) : undefined,
-        banner_url: formData.banner_url || undefined,
+        per_kill_point: formData.per_kill_point ? parseFloat(formData.per_kill_point) : undefined,
       });
 
       const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'admin@battlemanager.com';
 
+      // Helper function to remove undefined values from an object
+      const removeUndefined = (obj: any) => {
+        const cleaned: any = {};
+        for (const key in obj) {
+          if (obj[key] !== undefined) {
+            cleaned[key] = obj[key];
+          }
+        }
+        return cleaned;
+      };
+
       if (editingTournament) {
         const updateData: any = {
-          ...tournamentData,
+          ...removeUndefined(tournamentData),
           status: formData.status,
           updated_at: new Date(),
         };
 
-        // Only update credentials if provided
-        if (formData.ff_id) {
+        // Only update credentials if provided (and not empty)
+        if (formData.ff_id && formData.ff_id.trim()) {
           updateData.ff_id_encrypted = encryptCredentials(formData.ff_id);
+        } else if (formData.ff_id === '') {
+          // Allow clearing the field by setting to empty string
+          updateData.ff_id_encrypted = '';
         }
-        if (formData.ff_password) {
+        if (formData.ff_password && formData.ff_password.trim()) {
           updateData.ff_password_encrypted = encryptCredentials(formData.ff_password);
+        } else if (formData.ff_password === '') {
+          // Allow clearing the field by setting to empty string
+          updateData.ff_password_encrypted = '';
         }
 
         await updateDoc(doc(firestore, 'tournaments', editingTournament.id), updateData);
         toast.success('Tournament updated!');
       } else {
-        const ffIdEncrypted = formData.ff_id
-          ? encryptCredentials(formData.ff_id)
-          : undefined;
-        const ffPasswordEncrypted = formData.ff_password
-          ? encryptCredentials(formData.ff_password)
-          : undefined;
-
-        await addDoc(collection(firestore, 'tournaments'), {
-          ...tournamentData,
+        // Build the document object, only including optional fields if they have values
+        const tournamentDoc: any = {
+          ...removeUndefined(tournamentData),
           current_players: 0,
           status: formData.status,
           created_by: adminEmail,
-          ff_id_encrypted: ffIdEncrypted,
-          ff_password_encrypted: ffPasswordEncrypted,
           created_at: new Date(),
           updated_at: new Date(),
-        });
+        };
+
+        // Only include encrypted credentials if provided
+        if (formData.ff_id && formData.ff_id.trim()) {
+          tournamentDoc.ff_id_encrypted = encryptCredentials(formData.ff_id);
+        }
+        if (formData.ff_password && formData.ff_password.trim()) {
+          tournamentDoc.ff_password_encrypted = encryptCredentials(formData.ff_password);
+        }
+
+        await addDoc(collection(firestore, 'tournaments'), tournamentDoc);
         toast.success('Tournament created!');
       }
 
@@ -100,15 +108,13 @@ export const TournamentManagement: React.FC = () => {
       setEditingTournament(null);
       setFormData({
         name: '',
-        description: '',
         entry_amount: '',
         max_players: '',
         start_time: '',
-        reveal_time: '',
+        per_kill_point: '',
         ff_id: '',
         ff_password: '',
         status: 'upcoming',
-        banner_url: '',
       });
       setShowPassword(false);
     } catch (error: any) {
@@ -116,26 +122,6 @@ export const TournamentManagement: React.FC = () => {
     }
   };
 
-  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
-      return;
-    }
-
-    setUploadingBanner(true);
-    try {
-      const url = await uploadImage(file, 'tournaments/banners');
-      setFormData({ ...formData, banner_url: url });
-      toast.success('Banner uploaded successfully!');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to upload banner');
-    } finally {
-      setUploadingBanner(false);
-    }
-  };
 
   const handleStatusChange = async (tournamentId: string, newStatus: TournamentStatus) => {
     try {
@@ -210,17 +196,13 @@ export const TournamentManagement: React.FC = () => {
     
     setFormData({
       name: tournament.name,
-      description: tournament.description || '',
       entry_amount: tournament.entry_amount.toString(),
       max_players: tournament.max_players.toString(),
       start_time: new Date(tournament.start_time).toISOString().slice(0, 16),
-      reveal_time: tournament.reveal_time
-        ? new Date(tournament.reveal_time).toISOString().slice(0, 16)
-        : '',
+      per_kill_point: tournament.per_kill_point?.toString() || '',
       ff_id: ffId,
       ff_password: ffPassword,
       status: tournament.status,
-      banner_url: tournament.banner_url || '',
     });
     setShowForm(true);
   };
@@ -236,17 +218,17 @@ export const TournamentManagement: React.FC = () => {
     }
   };
 
-  // Compute effective status based on reveal_time
+  // Compute effective status based on start_time
   const getEffectiveStatus = (tournament: Tournament): TournamentStatus => {
     // If manually set to completed or cancelled, respect that
     if (tournament.status === 'completed' || tournament.status === 'cancelled') {
       return tournament.status;
     }
     
-    // If reveal_time has passed and status is upcoming, show as live
-    if (tournament.status === 'upcoming' && tournament.reveal_time) {
+    // If start_time has passed and status is upcoming, show as live
+    if (tournament.status === 'upcoming' && tournament.start_time) {
       const now = new Date();
-      if (now >= new Date(tournament.reveal_time)) {
+      if (now >= new Date(tournament.start_time)) {
         return 'live';
       }
     }
@@ -272,16 +254,6 @@ export const TournamentManagement: React.FC = () => {
   return (
     <div className="min-h-screen bg-bg pb-20">
       <div className="container mx-auto px-4 py-6">
-        {/* Error Message */}
-        {error && (
-          <div className="bg-accent bg-opacity-20 border border-accent rounded-lg p-4 mb-6">
-            <p className="text-accent font-body">
-              ⚠️ Unable to load tournament data. Please check your connection and refresh the page.
-            </p>
-            <p className="text-xs text-gray-400 mt-2">Error: {error.message || 'Unknown error'}</p>
-          </div>
-        )}
-
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <h1 className="text-3xl font-heading text-primary text-glow">
             Tournament Management
@@ -293,15 +265,13 @@ export const TournamentManagement: React.FC = () => {
               setEditingTournament(null);
                 setFormData({
                   name: '',
-                  description: '',
                   entry_amount: '',
                   max_players: '',
                   start_time: '',
-                  reveal_time: '',
+                  per_kill_point: '',
                   ff_id: '',
                   ff_password: '',
                   status: 'upcoming',
-                  banner_url: '',
                 });
                 setShowPassword(false);
             }}
@@ -368,15 +338,6 @@ export const TournamentManagement: React.FC = () => {
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm mb-2">Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-primary"
-                  rows={3}
-                />
-              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm mb-2">Entry Amount (Points)</label>
@@ -412,12 +373,14 @@ export const TournamentManagement: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm mb-2">Reveal Time (Optional)</label>
+                  <label className="block text-sm mb-2">Per Kill Point (Optional)</label>
                   <input
-                    type="datetime-local"
-                    value={formData.reveal_time}
-                    onChange={(e) => setFormData({ ...formData, reveal_time: e.target.value })}
+                    type="number"
+                    value={formData.per_kill_point}
+                    onChange={(e) => setFormData({ ...formData, per_kill_point: e.target.value })}
                     className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-primary"
+                    min="0"
+                    placeholder="Points per kill"
                   />
                 </div>
                 <div>
@@ -477,42 +440,11 @@ export const TournamentManagement: React.FC = () => {
                       )}
                     </AnimatePresence>
                   </div>
-                  {formData.reveal_time && formData.status === 'upcoming' && (
+                  {formData.start_time && formData.status === 'upcoming' && (
                     <p className="text-xs text-gray-500 mt-1">
-                      Auto-switches to Live when reveal time passes
+                      Auto-switches to Live when start time passes
                     </p>
                   )}
-                </div>
-                <div>
-                  <label className="block text-sm mb-2">Banner Image</label>
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleBannerUpload}
-                      disabled={uploadingBanner}
-                      className="hidden"
-                      id="banner-upload"
-                    />
-                    <label
-                      htmlFor="banner-upload"
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-700 cursor-pointer hover:border-primary transition ${
-                        uploadingBanner ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    >
-                      <HiPhotograph className="w-5 h-5" />
-                      {uploadingBanner ? 'Uploading...' : 'Upload Banner'}
-                    </label>
-                    {formData.banner_url && (
-                      <div className="flex-1">
-                        <img
-                          src={formData.banner_url}
-                          alt="Banner preview"
-                          className="h-20 w-auto rounded-lg object-cover"
-                  />
-                </div>
-              )}
-                  </div>
                 </div>
                 <div className="space-y-4">
                   <div>
@@ -591,15 +523,6 @@ export const TournamentManagement: React.FC = () => {
                 className="bg-bg-secondary border border-gray-800 rounded-lg p-4 hover:border-primary transition"
               >
                 <div className="flex flex-col md:flex-row gap-4">
-                  {tournament.banner_url && (
-                    <div className="md:w-32 h-32 flex-shrink-0">
-                      <img
-                        src={tournament.banner_url}
-                        alt={tournament.name}
-                        className="w-full h-full object-cover rounded-lg"
-                      />
-                    </div>
-                  )}
                   <div className="flex-1">
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex-1">
@@ -621,11 +544,6 @@ export const TournamentManagement: React.FC = () => {
                             return null;
                           })()}
                         </div>
-                        {tournament.description && (
-                          <p className="text-sm text-gray-400 mt-1 line-clamp-2">
-                            {tournament.description}
-                          </p>
-                        )}
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <span className={`px-3 py-1 rounded text-xs font-heading ${getStatusColor(getEffectiveStatus(tournament))}`}>
@@ -670,11 +588,11 @@ export const TournamentManagement: React.FC = () => {
                         {new Date(tournament.start_time).toLocaleString()}
                       </p>
                     </div>
-                      {tournament.reveal_time && (
+                      {tournament.per_kill_point && (
                         <div>
-                          <p className="text-xs text-gray-400">Reveal Time</p>
+                          <p className="text-xs text-gray-400">Per Kill Point</p>
                           <p className="text-xs text-white">
-                            {new Date(tournament.reveal_time).toLocaleString()}
+                            {tournament.per_kill_point} pts
                           </p>
                         </div>
                       )}

@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { BannerManagement } from '../../components/admin/banner-management';
-import { HiChevronDown } from 'react-icons/hi';
+import { HiChevronDown, HiLogout } from 'react-icons/hi';
 import { useAppSettings } from '../../hooks/useAppSettings';
+import { useAuth } from '../../contexts/AuthContext';
+import { ROUTES } from '../../utils/constants';
 import toast from 'react-hot-toast';
 
 interface SettingsSectionProps {
@@ -135,6 +138,24 @@ const CommissionSettings: React.FC = () => {
 };
 
 export const AdminSettings: React.FC = () => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await logout();
+      toast.success('Logged out successfully');
+      navigate(ROUTES.ADMIN_LOGIN);
+    } catch (error: any) {
+      console.error('Logout error:', error);
+      toast.error('Failed to logout. Please try again.');
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-bg text-white pb-20">
       <div className="container mx-auto px-4 py-8">
@@ -163,6 +184,30 @@ export const AdminSettings: React.FC = () => {
             delay={0.2}
           >
             <CommissionSettings />
+          </SettingsSection>
+
+          <SettingsSection
+            title="Account"
+            description="Manage your admin account"
+            delay={0.3}
+          >
+            <div className="space-y-4">
+              <div className="bg-bg border border-accent border-opacity-30 rounded-lg p-4">
+                <p className="text-sm text-gray-400 mb-4">
+                  Sign out from your admin account. You will need to login again to access admin features.
+                </p>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="w-full bg-accent text-white py-3 rounded-lg font-heading hover:bg-opacity-80 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <HiLogout className="w-5 h-5" />
+                {isLoggingOut ? 'Logging out...' : 'Logout'}
+              </motion.button>
+            </div>
           </SettingsSection>
         </div>
       </div>

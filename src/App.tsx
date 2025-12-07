@@ -76,6 +76,11 @@ const LoginPage = lazy(() =>
     default: module.LoginPage,
   }))
 );
+const AdminLoginPage = lazy(() =>
+  import('./pages/admin/admin-login-page').then((module) => ({
+    default: module.AdminLoginPage,
+  }))
+);
 const NotificationsPage = lazy(() =>
   import('./pages/notifications-page').then((module) => ({
     default: module.NotificationsPage,
@@ -101,15 +106,23 @@ function App() {
                     <Route
                       path={ROUTES.LOGIN}
                       element={
-                        <ProtectedRoute>
+                        <ProtectedRoute requireAuth={false}>
                           <LoginPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path={ROUTES.ADMIN_LOGIN}
+                      element={
+                        <ProtectedRoute requireAuth={false}>
+                          <AdminLoginPage />
                         </ProtectedRoute>
                       }
                     />
                     <Route
                       path={ROUTES.HOME}
                       element={
-                        <ProtectedRoute requireAuth={true}>
+                        <ProtectedRoute requireAuth={false}>
                           <HomePage />
                         </ProtectedRoute>
                       }

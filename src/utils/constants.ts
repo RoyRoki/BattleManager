@@ -26,6 +26,7 @@ export const ROUTES = {
   PROFILE: '/profile',
   NOTIFICATIONS: '/notifications',
   TOURNAMENT_HISTORY: '/tournaments/history',
+  ADMIN_LOGIN: '/admin/9800881300', // Secret admin login route
   ADMIN_DASHBOARD: '/admin',
   ADMIN_TOURNAMENTS: '/admin/tournaments',
   ADMIN_USERS: '/admin/users',

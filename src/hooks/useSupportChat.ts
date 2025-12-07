@@ -22,6 +22,20 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
   // Determine which user's chat to view
   const targetMobile = options?.targetUserMobile || user?.mobile_no;
 
+  // Mark messages as read when admin views a chat
+  const markMessagesAsRead = useCallback(async (userMobile: string) => {
+    if (!database || !isAdmin || !userMobile) return;
+
+    try {
+      const metaRef = ref(database, `support_chats/${userMobile}/meta`);
+      await update(metaRef, {
+        last_read_by_admin: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  }, [isAdmin]);
+
   // Listen to messages for a specific user's support chat
   useEffect(() => {
     if (!database) {
@@ -71,11 +85,16 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
       }
     );
 
+    // Mark messages as read when admin views the chat
+    if (isAdmin && targetMobile) {
+      markMessagesAsRead(targetMobile);
+    }
+
     return () => {
       off(messagesRef);
       unsubscribe();
     };
-  }, [targetMobile]);
+  }, [targetMobile, isAdmin, markMessagesAsRead]);
 
   // Admin: Load all support chats list
   const loadSupportChats = useCallback(async () => {
@@ -108,16 +127,63 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
             const firstUserMessage = sortedMessages.find(msg => !msg.is_admin);
             const userName = firstUserMessage?.user_name || userMobile;
             
-            // Count unread messages (messages from user after last admin reply)
+            // Count unread messages (messages from user after last admin read timestamp)
             let unreadCount = 0;
             let hasAdminReply = false;
-
-            for (let i = sortedMessages.length - 1; i >= 0; i--) {
-              if (sortedMessages[i].is_admin) {
-                hasAdminReply = true;
-                break;
+            
+            // Get last_read_by_admin timestamp from metadata
+            const meta = chatData.meta || {};
+            const lastReadByAdmin = meta.last_read_by_admin;
+            // Convert timestamp to number (handle Firebase server timestamp objects)
+            let lastReadTimestamp: number | null = null;
+            if (lastReadByAdmin !== undefined && lastReadByAdmin !== null) {
+              if (typeof lastReadByAdmin === 'number') {
+                lastReadTimestamp = lastReadByAdmin;
+              } else if (typeof lastReadByAdmin === 'string') {
+                // Handle string timestamps
+                lastReadTimestamp = Number(lastReadByAdmin) || null;
+              } else if (lastReadByAdmin && typeof lastReadByAdmin === 'object') {
+                // Firebase server timestamp placeholder - treat as unread until server resolves
+                if ('.sv' in lastReadByAdmin) {
+                  lastReadTimestamp = null;
+                } else {
+                  // Try to extract timestamp value from object
+                  lastReadTimestamp = Number(lastReadByAdmin) || null;
+                }
               }
-              unreadCount++;
+            }
+
+            // Count unread: messages from user that are after last_read_by_admin timestamp
+            for (let i = sortedMessages.length - 1; i >= 0; i--) {
+              const msg = sortedMessages[i];
+              
+              if (msg.is_admin) {
+                hasAdminReply = true;
+                // If admin has replied, don't count messages before the reply as unread
+                // But continue to check older messages
+                continue;
+              } else {
+                // Only count as unread if:
+                // 1. It's a user message (not admin)
+                // 2. Either no last_read_by_admin timestamp exists, or message is after it
+                let msgTimestamp: number = 0;
+                if (msg.timestamp) {
+                  if (typeof msg.timestamp === 'number') {
+                    msgTimestamp = msg.timestamp;
+                  } else if (typeof msg.timestamp === 'string') {
+                    msgTimestamp = Number(msg.timestamp) || 0;
+                  } else {
+                    msgTimestamp = 0;
+                  }
+                }
+                
+                if (lastReadTimestamp === null || msgTimestamp > lastReadTimestamp) {
+                  unreadCount++;
+                } else {
+                  // Messages before last_read_by_admin are read, stop counting
+                  break;
+                }
+              }
             }
 
             chatList.push({
@@ -201,11 +267,18 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
 
       // Update chat metadata
       const metaRef = ref(database, `support_chats/${chatMobile}/meta`);
-      await update(metaRef, {
+      const metaUpdate: any = {
         last_message: message.trim().substring(0, 100),
         last_message_time: serverTimestamp(),
         has_admin_reply: isAdmin || false,
-      });
+      };
+      
+      // If admin is replying, mark all messages as read
+      if (isAdmin) {
+        metaUpdate.last_read_by_admin = serverTimestamp();
+      }
+      
+      await update(metaRef, metaUpdate);
 
       return true;
     } catch (error) {
@@ -255,11 +328,18 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
 
       // Update chat metadata
       const metaRef = ref(database, `support_chats/${chatMobile}/meta`);
-      await update(metaRef, {
+      const metaUpdate: any = {
         last_message: '📷 Image',
         last_message_time: serverTimestamp(),
         has_admin_reply: isAdmin || false,
-      });
+      };
+      
+      // If admin is replying, mark all messages as read
+      if (isAdmin) {
+        metaUpdate.last_read_by_admin = serverTimestamp();
+      }
+      
+      await update(metaRef, metaUpdate);
 
       setIsUploading(false);
       return true;
@@ -280,5 +360,6 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
     supportChats,
     isLoadingChats,
     loadSupportChats,
+    markMessagesAsRead,
   };
 };

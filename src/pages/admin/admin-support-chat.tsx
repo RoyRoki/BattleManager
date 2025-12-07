@@ -10,7 +10,7 @@ import { SupportChat } from '../../types';
 export const AdminSupportChat: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { supportChats, isLoadingChats, loadSupportChats } = useSupportChat();
+  const { supportChats, isLoadingChats, loadSupportChats, markMessagesAsRead } = useSupportChat();
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -21,6 +21,17 @@ export const AdminSupportChat: React.FC = () => {
       setSelectedChat(userMobile);
     }
   }, [searchParams]);
+
+  // Mark messages as read when chat is selected
+  useEffect(() => {
+    if (selectedChat && markMessagesAsRead) {
+      markMessagesAsRead(selectedChat);
+      // Reload chats to update unread count
+      setTimeout(() => {
+        loadSupportChats();
+      }, 500);
+    }
+  }, [selectedChat, markMessagesAsRead, loadSupportChats]);
 
   // Filter chats by search query
   const filteredChats = supportChats.filter((chat) => {

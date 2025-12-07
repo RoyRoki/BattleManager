@@ -16,9 +16,11 @@ export const AppHeader: React.FC = () => {
               transition={{ duration: 0.3 }}
               className="flex items-center gap-2"
             >
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-bg font-heading font-bold text-lg">BM</span>
-              </div>
+              <img
+                src="/applogo.png"
+                alt="BattleManager Logo"
+                className="w-10 h-10 rounded-lg object-contain"
+              />
               <span className="text-xl font-heading font-bold text-primary text-glow">
                 BattleManager
               </span>
