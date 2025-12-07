@@ -259,45 +259,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-  const { email, otp } = req.body;
-  const MAX_ATTEMPTS = 3;
+    const { email, otp } = req.body;
+    const MAX_ATTEMPTS = 3;
 
-  // Debug logging
-  console.log('verify-otp: Environment check:', {
-    NODE_ENV: process.env.NODE_ENV,
-  });
-
-  // Email validation
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!email || !emailRegex.test(email)) {
-    return res.status(400).json({ error: 'Valid email address is required' });
-  }
-
-  // Normalize email (lowercase) for storage lookup
-  const normalizedEmail = email.toLowerCase().trim();
-
-  // Encode email for Firebase Realtime Database path (replace invalid chars)
-  // Firebase paths can't contain: . # $ [ ]
-  const encodedEmail = normalizedEmail.replace(/[.#$[\]]/g, (char: string) => {
-    const map: Record<string, string> = { '.': '_DOT_', '#': '_HASH_', '$': '_DOLLAR_', '[': '_LBRACK_', ']': '_RBRACK_' };
-    return map[char] || char;
-  });
-
-  if (!otp || !/^\d{6}$/.test(otp)) {
-    return res.status(400).json({ error: 'Valid 6-digit OTP is required' });
-  }
-
-  // Reject common test OTPs - only accept OTPs from BREVO
-  const TEST_OTPS = ['123456', '000000', '111111', '123123'];
-  if (TEST_OTPS.includes(otp)) {
-    console.warn('verify-otp: Test OTP rejected:', otp);
-    return res.status(400).json({
-      success: false,
-      error: 'Invalid OTP. Please use the OTP sent to your email address.',
+    // Debug logging
+    console.log('verify-otp: Environment check:', {
+      NODE_ENV: process.env.NODE_ENV,
     });
-  }
 
-  try {
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Valid email address is required' });
+    }
+
+    // Normalize email (lowercase) for storage lookup
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Encode email for Firebase Realtime Database path (replace invalid chars)
+    // Firebase paths can't contain: . # $ [ ]
+    const encodedEmail = normalizedEmail.replace(/[.#$[\]]/g, (char: string) => {
+      const map: Record<string, string> = { '.': '_DOT_', '#': '_HASH_', '$': '_DOLLAR_', '[': '_LBRACK_', ']': '_RBRACK_' };
+      return map[char] || char;
+    });
+
+    if (!otp || !/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ error: 'Valid 6-digit OTP is required' });
+    }
+
+    // Reject common test OTPs - only accept OTPs from BREVO
+    const TEST_OTPS = ['123456', '000000', '111111', '123123'];
+    if (TEST_OTPS.includes(otp)) {
+      console.warn('verify-otp: Test OTP rejected:', otp);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid OTP. Please use the OTP sent to your email address.',
+      });
+    }
+
+    try {
     // Ensure Firebase is properly initialized
     console.log('verify-otp: Ensuring Firebase Admin is initialized');
     const { db } = ensureFirebaseInitialized();

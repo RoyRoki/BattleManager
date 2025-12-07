@@ -259,25 +259,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-  const { email } = req.body;
+    const { email } = req.body;
 
-  // Email validation
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!email || !emailRegex.test(email)) {
-    return res.status(400).json({ error: 'Valid email address is required' });
-  }
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Valid email address is required' });
+    }
 
-  // Normalize email (lowercase) for storage
-  const normalizedEmail = email.toLowerCase().trim();
+    // Normalize email (lowercase) for storage
+    const normalizedEmail = email.toLowerCase().trim();
 
-  // Encode email for Firebase Realtime Database path (replace invalid chars)
-  // Firebase paths can't contain: . # $ [ ]
-  const encodedEmail = normalizedEmail.replace(/[.#$[\]]/g, (char: string) => {
-    const map: Record<string, string> = { '.': '_DOT_', '#': '_HASH_', '$': '_DOLLAR_', '[': '_LBRACK_', ']': '_RBRACK_' };
-    return map[char] || char;
-  });
+    // Encode email for Firebase Realtime Database path (replace invalid chars)
+    // Firebase paths can't contain: . # $ [ ]
+    const encodedEmail = normalizedEmail.replace(/[.#$[\]]/g, (char: string) => {
+      const map: Record<string, string> = { '.': '_DOT_', '#': '_HASH_', '$': '_DOLLAR_', '[': '_LBRACK_', ']': '_RBRACK_' };
+      return map[char] || char;
+    });
 
-  // Helper function to get BREVO API key with fallback support
+    // Helper function to get BREVO API key with fallback support
   const getBrevoKey = (): string | null => {
     // Try keys in priority order
     const keyCandidates = [
@@ -320,12 +320,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return null;
   };
 
-  const BREVO_KEY = getBrevoKey();
-  const BREVO_SMTP_KEY = getBrevoSmtpKey();
-  const OTP_EXPIRY_MINUTES = 5;
+    const BREVO_KEY = getBrevoKey();
+    const BREVO_SMTP_KEY = getBrevoSmtpKey();
+    const OTP_EXPIRY_MINUTES = 5;
 
-  // Debug logging
-  console.log('send-otp: Environment check:', {
+    // Debug logging
+    console.log('send-otp: Environment check:', {
     NODE_ENV: process.env.NODE_ENV,
     hasBrevoKey: !!BREVO_KEY,
     hasBrevoSmtpKey: !!BREVO_SMTP_KEY,
@@ -335,37 +335,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     email: normalizedEmail,
   });
 
-  // Check for BREVO API keys with fallback support
-  if (!BREVO_KEY) {
-    console.error('send-otp: Missing BREVO API key in all fallback sources');
-    console.error('send-otp: Checked keys:', {
-      VERCEL_BREVO_KEY: !!process.env.VERCEL_BREVO_KEY,
-      VERCEL_BREVO_KEY_FALLBACK_1: !!process.env.VERCEL_BREVO_KEY_FALLBACK_1,
-      VERCEL_BREVO_KEY_FALLBACK_2: !!process.env.VERCEL_BREVO_KEY_FALLBACK_2,
-      BREVO_KEY: !!process.env.BREVO_KEY,
-      BREVO_API_KEY: !!process.env.BREVO_API_KEY,
-    });
-    return res.status(500).json({ 
-      success: false,
-      error: 'BREVO API key not configured. Please set VERCEL_BREVO_KEY or one of the fallback environment variables.' 
-    });
-  }
+    // Check for BREVO API keys with fallback support
+    if (!BREVO_KEY) {
+      console.error('send-otp: Missing BREVO API key in all fallback sources');
+      console.error('send-otp: Checked keys:', {
+        VERCEL_BREVO_KEY: !!process.env.VERCEL_BREVO_KEY,
+        VERCEL_BREVO_KEY_FALLBACK_1: !!process.env.VERCEL_BREVO_KEY_FALLBACK_1,
+        VERCEL_BREVO_KEY_FALLBACK_2: !!process.env.VERCEL_BREVO_KEY_FALLBACK_2,
+        BREVO_KEY: !!process.env.BREVO_KEY,
+        BREVO_API_KEY: !!process.env.BREVO_API_KEY,
+      });
+      return res.status(500).json({ 
+        success: false,
+        error: 'BREVO API key not configured. Please set VERCEL_BREVO_KEY or one of the fallback environment variables.' 
+      });
+    }
 
-  if (!BREVO_SMTP_KEY) {
-    console.error('send-otp: Missing BREVO SMTP key in all fallback sources');
-    console.error('send-otp: Checked keys:', {
-      VERCEL_BREVO_SMTP_KEY: !!process.env.VERCEL_BREVO_SMTP_KEY,
-      VERCEL_BREVO_SMTP_KEY_FALLBACK_1: !!process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_1,
-      VERCEL_BREVO_SMTP_KEY_FALLBACK_2: !!process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_2,
-      BREVO_SMTP_KEY: !!process.env.BREVO_SMTP_KEY,
-    });
-    return res.status(500).json({ 
-      success: false,
-      error: 'BREVO SMTP key not configured. Please set VERCEL_BREVO_SMTP_KEY or one of the fallback environment variables.' 
-    });
-  }
+    if (!BREVO_SMTP_KEY) {
+      console.error('send-otp: Missing BREVO SMTP key in all fallback sources');
+      console.error('send-otp: Checked keys:', {
+        VERCEL_BREVO_SMTP_KEY: !!process.env.VERCEL_BREVO_SMTP_KEY,
+        VERCEL_BREVO_SMTP_KEY_FALLBACK_1: !!process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_1,
+        VERCEL_BREVO_SMTP_KEY_FALLBACK_2: !!process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_2,
+        BREVO_SMTP_KEY: !!process.env.BREVO_SMTP_KEY,
+      });
+      return res.status(500).json({ 
+        success: false,
+        error: 'BREVO SMTP key not configured. Please set VERCEL_BREVO_SMTP_KEY or one of the fallback environment variables.' 
+      });
+    }
 
-  try {
+    try {
     // Generate secure random 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiryTime = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
