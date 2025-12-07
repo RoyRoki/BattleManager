@@ -1,32 +1,111 @@
 // Vercel serverless function for verifying OTP
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getDatabase } from 'firebase-admin/database';
+import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
+import { getDatabase, Database } from 'firebase-admin/database';
 
-// Initialize Firebase Admin (only once)
-if (!getApps().length) {
-  try {
-    let serviceAccountStr = process.env.FIREBASE_ADMIN_SDK || '{}';
-    // Remove surrounding quotes if present (from .env.local format)
-    if (serviceAccountStr.startsWith('"') && serviceAccountStr.endsWith('"')) {
-      serviceAccountStr = serviceAccountStr.slice(1, -1);
+// Helper function to ensure Firebase Admin is initialized
+function ensureFirebaseInitialized(): { app: App; db: Database } {
+  let app: App;
+  
+  // Check if already initialized
+  const existingApps = getApps();
+  if (existingApps.length > 0) {
+    app = existingApps[0];
+    console.log('verify-otp: Using existing Firebase Admin app');
+  } else {
+    // Initialize Firebase Admin
+    const serviceAccountStr = process.env.FIREBASE_ADMIN_SDK;
+    if (!serviceAccountStr) {
+      const error = new Error('FIREBASE_ADMIN_SDK environment variable not set');
+      console.error('verify-otp: Firebase Admin initialization failed:', error.message);
+      throw error;
     }
-    // Unescape any escaped quotes
-    serviceAccountStr = serviceAccountStr.replace(/\\"/g, '"');
-    const serviceAccount = JSON.parse(serviceAccountStr);
 
-    if (serviceAccount && serviceAccount.project_id) {
-      initializeApp({
+    let serviceAccount: any;
+    
+    try {
+      // Remove surrounding quotes if present
+      let processedStr = serviceAccountStr;
+      if ((processedStr.startsWith('"') && processedStr.endsWith('"')) ||
+          (processedStr.startsWith("'") && processedStr.endsWith("'"))) {
+        processedStr = processedStr.slice(1, -1);
+      }
+      
+      // Fix control characters that break JSON parsing
+      let fixedJson = '';
+      let i = 0;
+      while (i < processedStr.length) {
+        if (processedStr[i] === '\\' && i + 1 < processedStr.length) {
+          fixedJson += processedStr[i] + processedStr[i + 1];
+          i += 2;
+        } else if (processedStr[i] === '\n' || processedStr[i] === '\r') {
+          if (processedStr[i] === '\r' && i + 1 < processedStr.length && processedStr[i + 1] === '\n') {
+            fixedJson += '\\n';
+            i += 2;
+          } else {
+            fixedJson += '\\n';
+            i += 1;
+          }
+        } else {
+          fixedJson += processedStr[i];
+          i += 1;
+        }
+      }
+      processedStr = fixedJson;
+      
+      // Handle escaped sequences properly
+      processedStr = processedStr.replace(/\\\\n/g, '\x00NEWLINE\x00');
+      processedStr = processedStr.replace(/\\n/g, '\n');
+      processedStr = processedStr.replace(/\x00NEWLINE\x00/g, '\\n');
+      
+      // Parse JSON
+      serviceAccount = JSON.parse(processedStr);
+    } catch (parseError: any) {
+      const error = new Error(`Failed to parse FIREBASE_ADMIN_SDK JSON: ${parseError.message}`);
+      console.error('verify-otp: JSON parse error:', error.message);
+      throw error;
+    }
+
+    if (!serviceAccount || !serviceAccount.project_id) {
+      const error = new Error('Invalid FIREBASE_ADMIN_SDK - missing project_id');
+      console.error('verify-otp: Invalid service account:', error.message);
+      throw error;
+    }
+
+    const databaseURL = process.env.FIREBASE_DATABASE_URL;
+    if (!databaseURL) {
+      const error = new Error('FIREBASE_DATABASE_URL environment variable not set');
+      console.error('verify-otp: Missing database URL:', error.message);
+      throw error;
+    }
+
+    try {
+      app = initializeApp({
         credential: cert(serviceAccount as any),
-        databaseURL: process.env.FIREBASE_DATABASE_URL,
+        databaseURL: databaseURL,
       });
       console.log('verify-otp: Firebase Admin initialized successfully');
-    } else {
-      console.warn('verify-otp: Invalid FIREBASE_ADMIN_SDK - missing project_id');
+    } catch (initError: any) {
+      const error = new Error(`Firebase Admin initialization failed: ${initError.message}`);
+      console.error('verify-otp: Initialization error:', error.message);
+      throw error;
     }
-  } catch (initError: any) {
-    console.error('verify-otp: Firebase Admin initialization error:', initError);
   }
+
+  // Get database instance
+  let db: Database;
+  try {
+    db = getDatabase(app);
+    if (!db) {
+      throw new Error('Database instance is null');
+    }
+  } catch (dbError: any) {
+    const error = new Error(`Failed to get database instance: ${dbError.message}`);
+    console.error('verify-otp: Database error:', error.message);
+    throw error;
+  }
+
+  return { app, db };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -82,26 +161,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Check if Firebase Admin is initialized
-    const apps = getApps();
-    if (apps.length === 0) {
-      console.warn('verify-otp: Firebase Admin not initialized');
-      return res.status(500).json({
-        success: false,
-        error: 'Firebase Admin not initialized. Please check environment variables.',
-      });
-    }
+    // Ensure Firebase is properly initialized
+    console.log('verify-otp: Ensuring Firebase Admin is initialized');
+    const { db } = ensureFirebaseInitialized();
 
-    const db = getDatabase();
-    if (!db) {
-      console.warn('verify-otp: Firebase Database not available');
-      return res.status(500).json({
-        success: false,
-        error: 'Firebase Database not available. Please check FIREBASE_DATABASE_URL environment variable.',
-      });
-    }
-
-      const otpRef = db.ref(`otps/${encodedEmail}`);
+    const otpRef = db.ref(`otps/${encodedEmail}`);
     const snapshot = await otpRef.once('value');
     const otpData = snapshot.val();
 

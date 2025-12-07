@@ -1,102 +1,111 @@
 // Vercel serverless function for sending OTP via BREVO SMTP
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getDatabase } from 'firebase-admin/database';
+import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
+import { getDatabase, Database } from 'firebase-admin/database';
 
-// Initialize Firebase Admin (only once)
-if (!getApps().length) {
-  try {
-    let serviceAccountStr = process.env.FIREBASE_ADMIN_SDK;
+// Helper function to ensure Firebase Admin is initialized
+function ensureFirebaseInitialized(): { app: App; db: Database } {
+  let app: App;
+  
+  // Check if already initialized
+  const existingApps = getApps();
+  if (existingApps.length > 0) {
+    app = existingApps[0];
+    console.log('send-otp: Using existing Firebase Admin app');
+  } else {
+    // Initialize Firebase Admin
+    const serviceAccountStr = process.env.FIREBASE_ADMIN_SDK;
     if (!serviceAccountStr) {
-      console.warn('send-otp: FIREBASE_ADMIN_SDK environment variable not set');
-    } else {
-      try {
-        // Try to parse as-is first (in case it's already valid JSON string)
-        let serviceAccount: any;
-        
-        // Remove surrounding quotes if present
-        if ((serviceAccountStr.startsWith('"') && serviceAccountStr.endsWith('"')) ||
-            (serviceAccountStr.startsWith("'") && serviceAccountStr.endsWith("'"))) {
-          serviceAccountStr = serviceAccountStr.slice(1, -1);
-        }
-        
-        // Fix control characters that break JSON parsing
-        // Replace actual newlines in the string with escaped newlines
-        // But preserve already-escaped sequences
-        let fixedJson = '';
-        let i = 0;
-        while (i < serviceAccountStr.length) {
-          if (serviceAccountStr[i] === '\\' && i + 1 < serviceAccountStr.length) {
-            // Preserve escape sequences
-            fixedJson += serviceAccountStr[i] + serviceAccountStr[i + 1];
+      const error = new Error('FIREBASE_ADMIN_SDK environment variable not set');
+      console.error('send-otp: Firebase Admin initialization failed:', error.message);
+      throw error;
+    }
+
+    let serviceAccount: any;
+    
+    try {
+      // Remove surrounding quotes if present
+      let processedStr = serviceAccountStr;
+      if ((processedStr.startsWith('"') && processedStr.endsWith('"')) ||
+          (processedStr.startsWith("'") && processedStr.endsWith("'"))) {
+        processedStr = processedStr.slice(1, -1);
+      }
+      
+      // Fix control characters that break JSON parsing
+      let fixedJson = '';
+      let i = 0;
+      while (i < processedStr.length) {
+        if (processedStr[i] === '\\' && i + 1 < processedStr.length) {
+          fixedJson += processedStr[i] + processedStr[i + 1];
+          i += 2;
+        } else if (processedStr[i] === '\n' || processedStr[i] === '\r') {
+          if (processedStr[i] === '\r' && i + 1 < processedStr.length && processedStr[i + 1] === '\n') {
+            fixedJson += '\\n';
             i += 2;
-          } else if (serviceAccountStr[i] === '\n' || serviceAccountStr[i] === '\r') {
-            // Replace actual newlines with \n
-            if (serviceAccountStr[i] === '\r' && i + 1 < serviceAccountStr.length && serviceAccountStr[i + 1] === '\n') {
-              fixedJson += '\\n';
-              i += 2; // Skip \r\n
-            } else {
-              fixedJson += '\\n';
-              i += 1;
-            }
           } else {
-            fixedJson += serviceAccountStr[i];
+            fixedJson += '\\n';
             i += 1;
           }
-        }
-        serviceAccountStr = fixedJson;
-        
-        // Now handle escaped sequences properly
-        // Replace \\n with actual newlines for the private_key field
-        serviceAccountStr = serviceAccountStr.replace(/\\\\n/g, '\x00NEWLINE\x00'); // Preserve double-escaped
-        serviceAccountStr = serviceAccountStr.replace(/\\n/g, '\n'); // Convert escaped to actual
-        serviceAccountStr = serviceAccountStr.replace(/\x00NEWLINE\x00/g, '\\n'); // Restore double-escaped
-        
-        // Try parsing as JSON
-        try {
-          serviceAccount = JSON.parse(serviceAccountStr);
-        } catch (parseError: unknown) {
-          const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
-          console.error('send-otp: JSON parse failed:', errorMessage);
-          // Try alternative: maybe the private_key has unescaped newlines that we need to keep as-is
-          // Parse the JSON manually by fixing the private_key field
-          try {
-            const privateKeyMatch = serviceAccountStr.match(/"private_key"\s*:\s*"([^"]*)"/);
-            if (privateKeyMatch) {
-              // This is a fallback - shouldn't normally be needed
-              console.warn('send-otp: Using fallback JSON parsing');
-            }
-            throw parseError; // Re-throw to show original error
-          } catch (fallbackError) {
-            throw parseError;
-          }
-        }
-
-        if (serviceAccount && serviceAccount.project_id) {
-          const databaseURL = process.env.FIREBASE_DATABASE_URL;
-          if (!databaseURL) {
-            console.warn('send-otp: FIREBASE_DATABASE_URL environment variable not set');
-          }
-
-          initializeApp({
-            credential: cert(serviceAccount as any),
-            databaseURL: databaseURL,
-          });
-          console.log('send-otp: Firebase Admin initialized successfully');
         } else {
-          console.warn('send-otp: Invalid FIREBASE_ADMIN_SDK - missing project_id');
+          fixedJson += processedStr[i];
+          i += 1;
         }
-      } catch (parseError: any) {
-        console.error('send-otp: Failed to parse FIREBASE_ADMIN_SDK JSON:', parseError.message);
-        console.error('send-otp: Error at position:', parseError.message.match(/position (\d+)/)?.[1]);
-        console.error('send-otp: First 100 chars of env var:', serviceAccountStr?.substring(0, 100));
-        throw parseError;
       }
+      processedStr = fixedJson;
+      
+      // Handle escaped sequences properly
+      processedStr = processedStr.replace(/\\\\n/g, '\x00NEWLINE\x00');
+      processedStr = processedStr.replace(/\\n/g, '\n');
+      processedStr = processedStr.replace(/\x00NEWLINE\x00/g, '\\n');
+      
+      // Parse JSON
+      serviceAccount = JSON.parse(processedStr);
+    } catch (parseError: any) {
+      const error = new Error(`Failed to parse FIREBASE_ADMIN_SDK JSON: ${parseError.message}`);
+      console.error('send-otp: JSON parse error:', error.message);
+      throw error;
     }
-  } catch (initError: any) {
-    console.error('send-otp: Firebase Admin initialization error:', initError);
-    console.error('send-otp: Please check FIREBASE_ADMIN_SDK format in .env.local');
+
+    if (!serviceAccount || !serviceAccount.project_id) {
+      const error = new Error('Invalid FIREBASE_ADMIN_SDK - missing project_id');
+      console.error('send-otp: Invalid service account:', error.message);
+      throw error;
+    }
+
+    const databaseURL = process.env.FIREBASE_DATABASE_URL;
+    if (!databaseURL) {
+      const error = new Error('FIREBASE_DATABASE_URL environment variable not set');
+      console.error('send-otp: Missing database URL:', error.message);
+      throw error;
+    }
+
+    try {
+      app = initializeApp({
+        credential: cert(serviceAccount as any),
+        databaseURL: databaseURL,
+      });
+      console.log('send-otp: Firebase Admin initialized successfully');
+    } catch (initError: any) {
+      const error = new Error(`Firebase Admin initialization failed: ${initError.message}`);
+      console.error('send-otp: Initialization error:', error.message);
+      throw error;
+    }
   }
+
+  // Get database instance
+  let db: Database;
+  try {
+    db = getDatabase(app);
+    if (!db) {
+      throw new Error('Database instance is null');
+    }
+  } catch (dbError: any) {
+    const error = new Error(`Failed to get database instance: ${dbError.message}`);
+    console.error('send-otp: Database error:', error.message);
+    throw error;
+  }
+
+  return { app, db };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -166,43 +175,118 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiryTime = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
 
-    // Store OTP in Firebase Realtime Database before sending SMS
-    // This ensures OTP is stored even if SMS fails, but we'll clean it up on failure
+    // Store OTP in Firebase Realtime Database before sending email
+    // This ensures OTP is stored even if email fails, but we'll clean it up on failure
     let otpStored = false;
+    let otpRef: any = null;
     try {
-      const db = getDatabase();
-      if (!db) {
-        console.error('send-otp: Firebase Database not available');
-        return res.status(500).json({
-          success: false,
-          error: 'Database not available. Please check FIREBASE_DATABASE_URL environment variable.',
-        });
-      }
+      // Ensure Firebase is properly initialized
+      console.log('send-otp: Ensuring Firebase Admin is initialized');
+      const { db } = ensureFirebaseInitialized();
 
-      const otpRef = db.ref(`otps/${encodedEmail}`);
-      await otpRef.set({
-        otp: otp,
-        createdAt: Date.now(),
-        expiresAt: expiryTime,
-        attempts: 0,
-      });
-      otpStored = true;
+      console.log('send-otp: Attempting to store OTP in Firebase at path: otps/' + encodedEmail);
+      otpRef = db.ref(`otps/${encodedEmail}`);
+      
+      // Use a transaction-like approach with retry logic
+      const MAX_RETRIES = 3;
+      let retryCount = 0;
+      let stored = false;
+      
+      while (!stored && retryCount < MAX_RETRIES) {
+        try {
+          await otpRef.set({
+            otp: otp,
+            createdAt: Date.now(),
+            expiresAt: expiryTime,
+            attempts: 0,
+          });
+          stored = true;
+          otpStored = true;
+          console.log('send-otp: OTP stored successfully in Firebase for email:', normalizedEmail);
+        } catch (setError: any) {
+          retryCount++;
+          if (retryCount >= MAX_RETRIES) {
+            throw setError;
+          }
+          // Wait before retry (exponential backoff)
+          const backoffMs = Math.pow(2, retryCount) * 100;
+          console.warn(`send-otp: OTP storage attempt ${retryCount} failed, retrying in ${backoffMs}ms:`, setError.message);
+          await new Promise(resolve => setTimeout(resolve, backoffMs));
+        }
+      }
 
       // Auto-delete OTP after expiry
       setTimeout(async () => {
         try {
-          await otpRef.remove();
+          if (otpRef) {
+            await otpRef.remove();
+            console.log('send-otp: Expired OTP cleaned up for email:', normalizedEmail);
+          }
         } catch (err) {
           console.error('send-otp: Error deleting expired OTP:', err);
         }
       }, OTP_EXPIRY_MINUTES * 60 * 1000);
 
-      console.log('send-otp: OTP stored in Firebase for email:', normalizedEmail);
     } catch (firebaseError: any) {
+      // Log comprehensive error details
+      const errorDetails = {
+        message: firebaseError.message,
+        code: firebaseError.code,
+        name: firebaseError.name,
+        stack: firebaseError.stack?.substring(0, 500), // Limit stack trace length
+        databaseURL: process.env.FIREBASE_DATABASE_URL ? 'SET' : 'NOT SET',
+        hasAdminSDK: !!process.env.FIREBASE_ADMIN_SDK,
+        adminSDKLength: process.env.FIREBASE_ADMIN_SDK?.length || 0,
+        appsInitialized: getApps().length,
+        errorType: firebaseError.constructor?.name || 'Unknown',
+      };
+      
       console.error('send-otp: Firebase storage error:', firebaseError);
+      console.error('send-otp: Firebase error details:', JSON.stringify(errorDetails, null, 2));
+      
+      // Provide more specific error messages based on error type
+      let errorMessage = 'Failed to store OTP. Please try again.';
+      let errorCode = 'STORAGE_ERROR';
+      
+      if (firebaseError.message?.includes('FIREBASE_ADMIN_SDK') || 
+          firebaseError.message?.includes('environment variable not set')) {
+        errorMessage = 'Firebase configuration error. Please contact support.';
+        errorCode = 'CONFIG_ERROR';
+      } else if (firebaseError.message?.includes('FIREBASE_DATABASE_URL') || 
+                 firebaseError.message?.includes('Database')) {
+        errorMessage = 'Database configuration error. Please contact support.';
+        errorCode = 'DATABASE_CONFIG_ERROR';
+      } else if (firebaseError.code === 'PERMISSION_DENIED' || 
+                 firebaseError.code === 'permission-denied' ||
+                 firebaseError.message?.includes('permission')) {
+        errorMessage = 'Database permission denied. Please contact support.';
+        errorCode = 'PERMISSION_ERROR';
+      } else if (firebaseError.code === 'UNAVAILABLE' || 
+                 firebaseError.message?.includes('unavailable') ||
+                 firebaseError.message?.includes('network')) {
+        errorMessage = 'Database temporarily unavailable. Please try again.';
+        errorCode = 'UNAVAILABLE_ERROR';
+      } else if (firebaseError.message?.includes('initialization') ||
+                 firebaseError.message?.includes('initialize')) {
+        errorMessage = 'Firebase initialization error. Please contact support.';
+        errorCode = 'INIT_ERROR';
+      }
+      
+      // Return error with sanitized details for production debugging
       return res.status(500).json({
         success: false,
-        error: 'Failed to store OTP. Please try again.',
+        error: errorMessage,
+        errorCode: errorCode,
+        // Include sanitized error details in production for debugging
+        details: {
+          code: firebaseError.code || 'UNKNOWN',
+          type: errorCode,
+          // Only include message in development or if it's a known safe error
+          message: (process.env.NODE_ENV === 'development' || 
+                   errorCode === 'UNAVAILABLE_ERROR' || 
+                   errorCode === 'PERMISSION_ERROR') 
+                   ? firebaseError.message : undefined,
+        },
       });
     }
 
@@ -318,13 +402,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       
       // Clean up Firebase entry if email failed
-      if (otpStored) {
+      if (otpStored && otpRef) {
         try {
-          const db = getDatabase();
-          if (db) {
-            await db.ref(`otps/${encodedEmail}`).remove();
-            console.log('send-otp: Cleaned up OTP from Firebase after email failure');
-          }
+          await otpRef.remove();
+          console.log('send-otp: Cleaned up OTP from Firebase after email failure');
         } catch (err) {
           console.error('send-otp: Error cleaning up OTP:', err);
         }
@@ -356,13 +437,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('send-otp: BREVO returned failure or unexpected response:', emailData);
       
       // Clean up Firebase entry if email failed
-      if (otpStored) {
+      if (otpStored && otpRef) {
         try {
-          const db = getDatabase();
-          if (db) {
-            await db.ref(`otps/${encodedEmail}`).remove();
-            console.log('send-otp: Cleaned up OTP from Firebase after email failure');
-          }
+          await otpRef.remove();
+          console.log('send-otp: Cleaned up OTP from Firebase after email failure');
         } catch (err) {
           console.error('send-otp: Error cleaning up OTP:', err);
         }
