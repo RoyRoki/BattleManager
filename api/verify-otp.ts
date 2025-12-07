@@ -45,20 +45,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { mobileNumber, otp } = req.body;
   const MAX_ATTEMPTS = 3;
-  
-  // Check for development/mock mode
-  // TEMPORARILY BYPASSING Fast2SMS - Using mock OTP for all environments
-  // To re-enable Fast2SMS: set MOCK_OTP to 'false' and ensure VERCEL_FAST2SMS_API_KEY is set
-  const MOCK_OTP = process.env.MOCK_OTP?.trim();
-  const isDevelopment = MOCK_OTP !== 'false'; // Always use mock mode unless explicitly disabled
-  const MOCK_OTP_CODE = '123456'; // Fixed OTP for testing
 
   // Debug logging
   console.log('verify-otp: Environment check:', {
     NODE_ENV: process.env.NODE_ENV,
-    MOCK_OTP: MOCK_OTP,
-    MOCK_OTP_type: typeof MOCK_OTP,
-    isDevelopment: isDevelopment,
   });
 
   if (!mobileNumber || !/^[6-9]\d{9}$/.test(mobileNumber)) {
@@ -69,12 +59,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Valid 6-digit OTP is required' });
   }
 
-  // In mock mode, accept the mock OTP directly (works even if Firebase fails)
-  if (isDevelopment && otp === MOCK_OTP_CODE) {
-    console.log('verify-otp: 🔧 MOCK MODE - Mock OTP verified successfully');
-    return res.status(200).json({
-      success: true,
-      message: 'OTP verified successfully (Mock Mode)',
+  // Reject common test OTPs - only accept OTPs from Fast2SMS
+  const TEST_OTPS = ['123456', '000000', '111111', '123123'];
+  if (TEST_OTPS.includes(otp)) {
+    console.warn('verify-otp: Test OTP rejected:', otp);
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid OTP. Please use the OTP sent to your mobile number.',
     });
   }
 
@@ -83,14 +74,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const apps = getApps();
     if (apps.length === 0) {
       console.warn('verify-otp: Firebase Admin not initialized');
-      // In mock mode, still accept the OTP even if Firebase is not available
-      if (isDevelopment && otp === MOCK_OTP_CODE) {
-        console.log('verify-otp: 🔧 MOCK MODE - Mock OTP verified (Firebase not available)');
-        return res.status(200).json({
-          success: true,
-          message: 'OTP verified successfully (Mock Mode)',
-        });
-      }
       return res.status(500).json({
         success: false,
         error: 'Firebase Admin not initialized. Please check environment variables.',
@@ -100,14 +83,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const db = getDatabase();
     if (!db) {
       console.warn('verify-otp: Firebase Database not available');
-      // In mock mode, still accept the OTP even if Database is not available
-      if (isDevelopment && otp === MOCK_OTP_CODE) {
-        console.log('verify-otp: 🔧 MOCK MODE - Mock OTP verified (Database not available)');
-        return res.status(200).json({
-          success: true,
-          message: 'OTP verified successfully (Mock Mode)',
-        });
-      }
       return res.status(500).json({
         success: false,
         error: 'Firebase Database not available. Please check FIREBASE_DATABASE_URL environment variable.',
@@ -119,15 +94,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const otpData = snapshot.val();
 
     if (!otpData) {
-      // In mock mode, also accept mock OTP even if not in Firebase
-      if (isDevelopment && otp === MOCK_OTP_CODE) {
-        console.log('verify-otp: 🔧 MOCK MODE - Mock OTP verified (no Firebase record)');
-        return res.status(200).json({
-          success: true,
-          message: 'OTP verified successfully (Mock Mode)',
-        });
-      }
-      
       return res.status(400).json({
         success: false,
         error: 'OTP not found or expired. Please request a new OTP.',

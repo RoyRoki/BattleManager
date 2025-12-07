@@ -122,7 +122,7 @@ function App() {
                     <Route
                       path={ROUTES.HOME}
                       element={
-                        <ProtectedRoute requireAuth={false}>
+                        <ProtectedRoute requireAuth>
                           <HomePage />
                         </ProtectedRoute>
                       }

@@ -4,7 +4,7 @@ import { collection, query, where, addDoc } from 'firebase/firestore';
 import { firestore } from '../services/firebaseService';
 import { useAuth } from '../contexts/AuthContext';
 import { usePoints } from '../contexts/PointsContext';
-import { generateAddMoneyUPIString } from '../services/upiService';
+import { generateAddMoneyUPIString, PAYMENT_APPS, generatePaymentAppIntent } from '../services/upiService';
 import { withdrawalSchema } from '../utils/validations';
 import { MIN_WITHDRAW, PRESET_WITHDRAWAL_AMOUNTS } from '../utils/constants';
 import { useAppSettings } from '../hooks/useAppSettings';
@@ -12,6 +12,7 @@ import { useFirestoreTransaction } from '../hooks/useFirestoreTransaction';
 import { Payment } from '../types';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
+import { HiCreditCard, HiCash } from 'react-icons/hi';
 
 // Preset amounts for adding money
 const PRESET_AMOUNTS = [100, 200, 500, 1000];
@@ -42,7 +43,7 @@ export const MoneyPage: React.FC = () => {
       : null
   ) as unknown as [{ docs: any[] } | null, boolean]) || [null, true];
 
-  const handleAddMoney = async () => {
+  const handlePaymentAppClick = async (app: typeof PAYMENT_APPS[0]) => {
     if (!user) {
       toast.error('Please login');
       return;
@@ -66,17 +67,18 @@ export const MoneyPage: React.FC = () => {
         updated_at: new Date(),
       });
 
-      // Generate UPI payment link and open payment app
-      const upiString = generateAddMoneyUPIString(
+      // Generate payment app intent URL
+      const intentUrl = generatePaymentAppIntent(
+        app,
         selectedAmount,
         `Add ${selectedAmount} Points - ${user.mobile_no}`
       );
 
-      // Open UPI payment app
-      window.location.href = upiString;
+      // Open payment app
+      window.location.href = intentUrl;
 
       toast.success(
-        'Payment request sent! Complete the payment in your UPI app. Admin will verify and approve.',
+        `Opening ${app.name}... Complete the payment. Admin will verify and approve.`,
         { duration: 5000 }
       );
 
@@ -273,28 +275,91 @@ export const MoneyPage: React.FC = () => {
               </motion.div>
             )}
 
-            {/* Pay Button */}
-            <motion.button
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              onClick={handleAddMoney}
-              disabled={!selectedAmount || isProcessing}
-              className="w-full bg-primary text-bg py-4 rounded-lg font-heading text-lg hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isProcessing ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-bg border-t-transparent rounded-full animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  Pay with UPI
-                </>
-              )}
-            </motion.button>
+            {/* Payment App Buttons - Only show when amount is selected */}
+            {selectedAmount && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-3 mb-6"
+              >
+                <p className="text-sm text-gray-400 text-center mb-3">
+                  Choose your payment app
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {PAYMENT_APPS.map((app) => {
+                    // Define app-specific styling
+                    const getAppStyles = (appName: string) => {
+                      switch (appName) {
+                        case 'Google Pay':
+                          return {
+                            gradient: 'from-blue-500 via-blue-600 to-indigo-600',
+                            iconBg: 'bg-blue-500',
+                            borderColor: 'hover:border-blue-400',
+                          };
+                        case 'PhonePe':
+                          return {
+                            gradient: 'from-purple-500 via-purple-600 to-pink-600',
+                            iconBg: 'bg-purple-500',
+                            borderColor: 'hover:border-purple-400',
+                          };
+                        case 'Paytm':
+                          return {
+                            gradient: 'from-blue-400 via-blue-500 to-cyan-500',
+                            iconBg: 'bg-blue-400',
+                            borderColor: 'hover:border-blue-300',
+                          };
+                        case 'BHIM':
+                          return {
+                            gradient: 'from-green-500 via-green-600 to-emerald-600',
+                            iconBg: 'bg-green-500',
+                            borderColor: 'hover:border-green-400',
+                          };
+                        default:
+                          return {
+                            gradient: 'from-gray-500 to-gray-600',
+                            iconBg: 'bg-gray-500',
+                            borderColor: 'hover:border-gray-400',
+                          };
+                      }
+                    };
+
+                    const styles = getAppStyles(app.name);
+
+                    return (
+                      <motion.button
+                        key={app.name}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handlePaymentAppClick(app)}
+                        disabled={isProcessing}
+                        className={`bg-bg border-2 border-gray-700 ${styles.borderColor} rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed group`}
+                      >
+                        {/* App Icon with gradient background */}
+                        <div
+                          className={`w-14 h-14 rounded-xl bg-gradient-to-br ${styles.gradient} flex items-center justify-center text-white shadow-lg group-hover:shadow-xl transition-shadow relative overflow-hidden`}
+                        >
+                          {app.name === 'Google Pay' ? (
+                            <div className="flex items-center justify-center w-full h-full">
+                              <span className="text-2xl font-bold">G</span>
+                              <span className="absolute top-0 right-0 w-1/2 h-1/2 bg-white/20 rounded-bl-full"></span>
+                            </div>
+                          ) : app.name === 'PhonePe' ? (
+                            <HiCreditCard className="w-8 h-8" />
+                          ) : app.name === 'Paytm' ? (
+                            <div className="flex items-center justify-center w-full h-full">
+                              <span className="text-xl font-bold">P</span>
+                            </div>
+                          ) : (
+                            <HiCash className="w-8 h-8" />
+                          )}
+                        </div>
+                        <span className="text-white text-sm font-heading">{app.name}</span>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
 
             <p className="text-xs text-gray-500 mt-4 text-center">
               After payment, admin will verify and approve your points within 24 hours.

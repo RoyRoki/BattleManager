@@ -21,17 +21,16 @@ export const sendOTP = async (mobileNumber: string): Promise<void> => {
     console.log('sendOTP: Response status:', response.status, response.statusText);
     
     const data = await response.json();
-    console.log('sendOTP: Response data:', data);
-
+    
+    // Check for success response
     if (!response.ok || !data.success) {
       const errorMsg = data.error || 'Failed to send OTP';
       console.error('sendOTP: Error response:', errorMsg);
       throw new Error(errorMsg);
     }
 
-    console.log('sendOTP: OTP sent successfully');
-    // OTP is now stored in Firebase and sent via SMS
-    // We don't return the OTP to client for security
+    // Log success
+    console.log('sendOTP: OTP sent successfully via Fast2SMS');
   } catch (error: any) {
     console.error('sendOTP: Exception caught:', error);
     console.error('sendOTP: Error details:', {

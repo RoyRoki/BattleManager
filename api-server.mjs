@@ -14,19 +14,78 @@ const require = createRequire(import.meta.url);
 const envPath = path.join(__dirname, '.env.local');
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf8');
-  envContent.split('\n').forEach(line => {
-    if (line && !line.startsWith('#')) {
-      const [key, ...valueParts] = line.split('=');
-      if (key && valueParts.length > 0) {
-        let value = valueParts.join('=').trim();
+  const lines = envContent.split('\n');
+  let currentKey = null;
+  let currentValue = [];
+  
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    
+    // Skip empty lines and comments
+    if (!trimmedLine || trimmedLine.startsWith('#')) {
+      if (currentKey && currentValue.length > 0) {
+        // Save previous multi-line value
+        process.env[currentKey] = currentValue.join('\n');
+        currentKey = null;
+        currentValue = [];
+      }
+      continue;
+    }
+    
+    // Check if this line starts a new key-value pair
+    if (trimmedLine.includes('=') && !trimmedLine.startsWith(' ')) {
+      // Save previous key-value if exists
+      if (currentKey && currentValue.length > 0) {
+        let value = currentValue.join('\n');
         // Remove surrounding quotes if present
         if (value.startsWith('"') && value.endsWith('"')) {
           value = value.slice(1, -1);
         }
-        process.env[key.trim()] = value;
+        process.env[currentKey] = value;
       }
+      
+      // Parse new key-value
+      const equalIndex = trimmedLine.indexOf('=');
+      currentKey = trimmedLine.substring(0, equalIndex).trim();
+      let value = trimmedLine.substring(equalIndex + 1).trim();
+      
+      // Check if value starts with quote (might be multi-line JSON)
+      if (value.startsWith('"') && !value.endsWith('"')) {
+        // Multi-line value starting
+        currentValue = [value];
+      } else if (value.endsWith('"') && currentValue.length > 0) {
+        // Multi-line value ending
+        currentValue.push(value);
+        const finalValue = currentValue.join('\n');
+        process.env[currentKey] = finalValue.startsWith('"') && finalValue.endsWith('"') 
+          ? finalValue.slice(1, -1) 
+          : finalValue;
+        currentKey = null;
+        currentValue = [];
+      } else {
+        // Single-line value
+        if (value.startsWith('"') && value.endsWith('"')) {
+          value = value.slice(1, -1);
+        }
+        process.env[currentKey] = value;
+        currentKey = null;
+        currentValue = [];
+      }
+    } else if (currentKey) {
+      // Continuation of multi-line value
+      currentValue.push(line);
     }
-  });
+  }
+  
+  // Handle last key-value if exists
+  if (currentKey && currentValue.length > 0) {
+    let value = currentValue.join('\n');
+    if (value.startsWith('"') && value.endsWith('"')) {
+      value = value.slice(1, -1);
+    }
+    process.env[currentKey] = value;
+  }
+  
   console.log('Loaded environment variables from .env.local');
 }
 

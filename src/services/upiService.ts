@@ -61,4 +61,61 @@ export const generateUPIQRData = (
   return generateUPIString(upiId, amount, merchantName, transactionNote);
 };
 
+/**
+ * Payment app configurations
+ */
+export interface PaymentApp {
+  name: string;
+  packageName: string;
+  scheme: string;
+}
+
+export const PAYMENT_APPS: PaymentApp[] = [
+  {
+    name: 'Google Pay',
+    packageName: 'com.google.android.apps.nbu.paisa.user',
+    scheme: 'upi',
+  },
+  {
+    name: 'PhonePe',
+    packageName: 'com.phonepe.app',
+    scheme: 'upi',
+  },
+  {
+    name: 'Paytm',
+    packageName: 'net.one97.paytm',
+    scheme: 'upi',
+  },
+  {
+    name: 'BHIM',
+    packageName: 'in.org.npci.upiapp',
+    scheme: 'upi',
+  },
+];
+
+/**
+ * Generate payment app intent URL
+ * @param app - Payment app configuration
+ * @param amount - Amount to pay
+ * @param transactionNote - Transaction note
+ * @returns Intent URL for the payment app
+ */
+export const generatePaymentAppIntent = (
+  app: PaymentApp,
+  amount: number,
+  transactionNote: string = 'Add Money to BattleManager'
+): string => {
+  // Build query parameters
+  const queryParams = new URLSearchParams({
+    pa: MERCHANT_UPI_ID,
+    pn: MERCHANT_NAME,
+    am: amount.toString(),
+    cu: 'INR',
+    tn: transactionNote,
+  });
+
+  // Format: intent://pay?pa=...#Intent;scheme=upi;package=...;end
+  return `intent://pay?${queryParams.toString()}#Intent;scheme=${app.scheme};package=${app.packageName};end`;
+};
+
 

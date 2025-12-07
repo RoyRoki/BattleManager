@@ -68,6 +68,7 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
   const [isNewUser, setIsNewUser] = useState(false);
   const [isCheckingUser, setIsCheckingUser] = useState(false);
   const [flowType, setFlowType] = useState<FlowType>('login');
+  const [isOTPVerifiedForReset, setIsOTPVerifiedForReset] = useState(false);
 
   const {
     sendOTPCode,
@@ -196,6 +197,8 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
         const result = await verifyOTP(mobileNumber, enteredOTP);
         
         if (result.success) {
+          // Mark OTP as verified before allowing access to reset password screen
+          setIsOTPVerifiedForReset(true);
           setStep('reset_password');
         } else {
           if (result.remainingAttempts !== undefined && result.remainingAttempts > 0) {
@@ -248,6 +251,7 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
 
       mobileSchema.parse(mobileNumber);
       setFlowType('forgot_password');
+      setIsOTPVerifiedForReset(false); // Reset verification state
       const success = await sendOTPCode(mobileNumber);
       
       if (success) {
@@ -262,6 +266,15 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
 
   const handleResetPassword = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Security check: Only allow password reset if OTP was verified
+    if (!isOTPVerifiedForReset) {
+      toast.error('Please verify OTP first');
+      setStep('login');
+      setFlowType('login');
+      return;
+    }
+    
     try {
       passwordSchema.parse(newPassword);
       
@@ -282,12 +295,25 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
         setConfirmNewPassword('');
         setStep('mobile');
         setFlowType('login');
+        setIsOTPVerifiedForReset(false);
         resetOTP();
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to reset password');
     }
-  }, [mobileNumber, enteredOTP, newPassword, confirmNewPassword, resetPassword, resetOTP]);
+  }, [mobileNumber, enteredOTP, newPassword, confirmNewPassword, isOTPVerifiedForReset, resetPassword, resetOTP]);
+
+  // Security: Protect reset_password step - only allow if OTP was verified
+  useEffect(() => {
+    if (step === 'reset_password' && !isOTPVerifiedForReset) {
+      // If somehow user gets to reset_password without OTP verification, redirect to login
+      toast.error('Please verify OTP first');
+      setStep('login');
+      setFlowType('login');
+      setIsOTPVerifiedForReset(false);
+      resetOTP();
+    }
+  }, [step, isOTPVerifiedForReset, resetOTP]);
 
   const handleBack = useCallback(() => {
     if (step === 'signup') {
@@ -300,10 +326,18 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
       setStep('mobile');
       setPassword('');
     } else if (step === 'otp' && flowType === 'forgot_password') {
-      // After OTP verification in forgot password flow, go to reset password
-      setStep('reset_password');
+      // Security fix: Go back to login step, not reset_password
+      // Reset OTP verification state
+      setIsOTPVerifiedForReset(false);
+      setStep('login');
+      setEnteredOTP('');
+      setFlowType('login');
+      resetOTP();
     } else if (step === 'reset_password') {
-      setStep('mobile');
+      // Security fix: Go back to login step (or mobile if no login step)
+      // Only allow access to reset_password if OTP was verified
+      setIsOTPVerifiedForReset(false);
+      setStep('login');
       setNewPassword('');
       setConfirmNewPassword('');
       setEnteredOTP('');
