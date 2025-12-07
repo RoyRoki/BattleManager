@@ -7,3 +7,4 @@ export interface INotificationRepository {
   markAllAsRead(userMobile: string): Promise<void>;
 }
 
+

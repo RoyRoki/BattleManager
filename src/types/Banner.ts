@@ -11,3 +11,4 @@ export interface Banner {
   updated_at: Date;
 }
 
+

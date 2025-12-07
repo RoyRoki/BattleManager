@@ -46,3 +46,4 @@ workbox-*.js
 
 .vercel
 .env*.local
+.env.production

@@ -119,10 +119,12 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`API server running on http://localhost:${PORT}`);
+  console.log(`API server also available on network at port ${PORT}`);
   console.log('Available endpoints:');
   console.log('  POST /api/send-otp');
   console.log('  POST /api/verify-otp');
 });
+
 

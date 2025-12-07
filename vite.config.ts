@@ -59,10 +59,11 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
+    host: true, // Listen on all addresses for network access
     proxy: {
       // Proxy API routes to local API server
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {

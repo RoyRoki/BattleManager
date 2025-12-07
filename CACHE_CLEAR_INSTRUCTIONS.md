@@ -63,3 +63,4 @@ The PWA (Progressive Web App) uses a service worker to cache JavaScript files fo
 3. Try a different browser to rule out browser-specific cache issues
 4. Check if corporate proxy/VPN is caching the site
 
+

@@ -4,10 +4,17 @@
 const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '';
 const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'battlemanager_preset';
 
+// Debug logging for production troubleshooting
+const isProduction = import.meta.env.PROD;
+console.log(`[Cloudinary] Environment: ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}`);
+console.log(`[Cloudinary] Cloud Name: ${cloudName ? cloudName : '❌ MISSING'}`);
+console.log(`[Cloudinary] Upload Preset: ${uploadPreset}`);
+
 // Validate Cloudinary configuration
 if (!cloudName) {
-  console.warn('⚠️  Cloudinary cloud name is missing. Image uploads will fail.');
-  console.warn('   Please set VITE_CLOUDINARY_CLOUD_NAME in your .env.local file');
+  console.error('❌ Cloudinary cloud name is missing. Image uploads will fail.');
+  console.error('   Please set VITE_CLOUDINARY_CLOUD_NAME in Vercel environment variables.');
+  console.error('   Remember: VITE_ variables are embedded at BUILD TIME - redeploy after adding!');
 }
 
 /**
@@ -34,13 +41,19 @@ export const uploadImage = async (
       formData.append('folder', folder);
     }
 
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-      {
-        method: 'POST',
-        body: formData,
-      }
-    );
+    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+    
+    console.log(`[Cloudinary] Uploading to: ${uploadUrl}`);
+    console.log(`[Cloudinary] Using preset: ${uploadPreset}`);
+    console.log(`[Cloudinary] Folder: ${includeFolder ? folder : '(none)'}`);
+    console.log(`[Cloudinary] File type: ${file.type}, size: ${(file.size / 1024).toFixed(2)}KB`);
+
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      body: formData,
+    });
+
+    console.log(`[Cloudinary] Response status: ${response.status}`);
 
     if (!response.ok) {
       // Try to get error details from response
@@ -49,8 +62,20 @@ export const uploadImage = async (
       try {
         errorData = await response.json();
         errorMessage = errorData.error?.message || errorData.message || errorMessage;
+        console.error('[Cloudinary] Error response:', JSON.stringify(errorData, null, 2));
       } catch (e) {
         errorMessage = response.statusText || errorMessage;
+        console.error('[Cloudinary] Could not parse error response');
+      }
+      
+      // Add helpful hints for common 400 errors
+      if (response.status === 400) {
+        console.error('[Cloudinary] 400 Error - Common causes:');
+        console.error('  1. Upload preset does not exist');
+        console.error('  2. Upload preset is not set to "unsigned"');
+        console.error('  3. Cloud name is incorrect');
+        console.error('  4. Preset has folder restrictions');
+        console.error(`  Current config: cloudName="${cloudName}", preset="${uploadPreset}"`);
       }
       
       return { error: errorMessage, errorData, status: response.status };
@@ -62,6 +87,7 @@ export const uploadImage = async (
       return { error: 'Upload succeeded but no URL returned' };
     }
     
+    console.log(`[Cloudinary] Upload successful: ${data.secure_url}`);
     return { url: data.secure_url };
   };
 

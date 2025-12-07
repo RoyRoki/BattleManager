@@ -47,9 +47,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const MAX_ATTEMPTS = 3;
   
   // Check for development/mock mode
-  // Enable mock mode if MOCK_OTP is set to 'true' or in development
+  // TEMPORARILY BYPASSING Fast2SMS - Using mock OTP for all environments
+  // To re-enable Fast2SMS: set MOCK_OTP to 'false' and ensure VERCEL_FAST2SMS_API_KEY is set
   const MOCK_OTP = process.env.MOCK_OTP?.trim();
-  const isDevelopment = process.env.NODE_ENV === 'development' || MOCK_OTP === 'true' || MOCK_OTP === '1';
+  const isDevelopment = MOCK_OTP !== 'false'; // Always use mock mode unless explicitly disabled
   const MOCK_OTP_CODE = '123456'; // Fixed OTP for testing
 
   // Debug logging

@@ -164,38 +164,6 @@ export const AdminSettings: React.FC = () => {
           >
             <CommissionSettings />
           </SettingsSection>
-
-          <SettingsSection
-            title="Withdrawal Settings"
-            description="Set minimum withdrawal amounts"
-            delay={0.2}
-          >
-            <p className="text-sm text-gray-500">Feature coming soon...</p>
-          </SettingsSection>
-
-          <SettingsSection
-            title="Site Banners"
-            description="Upload and manage site banners"
-            delay={0.3}
-          >
-            <p className="text-sm text-gray-500">Feature coming soon...</p>
-          </SettingsSection>
-
-          <SettingsSection
-            title="Default Settings"
-            description="Configure default tournament settings (e.g., maximum players)"
-            delay={0.4}
-          >
-            <p className="text-sm text-gray-500">Feature coming soon...</p>
-          </SettingsSection>
-
-          <SettingsSection
-            title="Chat Moderation"
-            description="Moderation tools for global chat"
-            delay={0.5}
-          >
-            <p className="text-sm text-gray-500">Feature coming soon...</p>
-          </SettingsSection>
         </div>
       </div>
     </div>
