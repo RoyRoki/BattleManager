@@ -62,7 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Encode email for Firebase Realtime Database path (replace invalid chars)
   // Firebase paths can't contain: . # $ [ ]
-  const encodedEmail = normalizedEmail.replace(/[.#$[\]]/g, (char) => {
+  const encodedEmail = normalizedEmail.replace(/[.#$[\]]/g, (char: string) => {
     const map: Record<string, string> = { '.': '_DOT_', '#': '_HASH_', '$': '_DOLLAR_', '[': '_LBRACK_', ']': '_RBRACK_' };
     return map[char] || char;
   });
