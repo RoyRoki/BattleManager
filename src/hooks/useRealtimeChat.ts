@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ref, push, onValue, off, serverTimestamp, remove, get } from 'firebase/database';
+import { ref, push, onValue, off, serverTimestamp, remove, get, query, limitToLast, orderByKey, endBefore } from 'firebase/database';
 import { database } from '../services/firebaseService';
 import { ChatMessage } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,15 +8,17 @@ export const useRealtimeChat = () => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const messagesRef = ref(database, 'global_chat');
-  const cleanupIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const messagesRef = database ? ref(database, 'global_chat') : null;
+  const cleanupIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   /**
    * Cleanup function to delete messages older than 2 days
    * Runs client-side to keep the chat database clean
    */
   const cleanupOldMessages = async (): Promise<void> => {
-    if (!database) {
+    if (!database || !messagesRef) {
       console.warn('Database not initialized, skipping cleanup');
       return;
     }
@@ -53,9 +55,10 @@ export const useRealtimeChat = () => {
       });
 
       // Delete old messages
-      if (messagesToDelete.length > 0) {
+      if (messagesToDelete.length > 0 && database && messagesRef) {
+        const db = database; // Type narrowing for TypeScript
         const deletePromises = messagesToDelete.map((messageId) => {
-          const messageRef = ref(database, `global_chat/${messageId}`);
+          const messageRef = ref(db, `global_chat/${messageId}`);
           return remove(messageRef);
         });
 
@@ -67,8 +70,55 @@ export const useRealtimeChat = () => {
     }
   };
 
+  const loadOlderMessages = async (): Promise<void> => {
+    if (!database || !messagesRef || isLoadingMore || !hasMoreMessages || messages.length === 0) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+    try {
+      // Get the first message timestamp to load messages before it
+      const firstMessageKey = messages[0].id;
+      const olderMessagesQuery = query(
+        messagesRef,
+        orderByKey(),
+        endBefore(firstMessageKey),
+        limitToLast(50)
+      );
+
+      const snapshot = await get(olderMessagesQuery);
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        const olderMessages: ChatMessage[] = Object.keys(data)
+          .map((key) => ({
+            id: key,
+            ...data[key],
+            timestamp: new Date(data[key].timestamp),
+          }))
+          .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+        if (olderMessages.length > 0) {
+          setMessages((prev) => [...olderMessages, ...prev]);
+        } else {
+          setHasMoreMessages(false);
+        }
+      } else {
+        setHasMoreMessages(false);
+      }
+    } catch (error) {
+      console.error('Error loading older messages:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
   useEffect(() => {
-    const unsubscribe = onValue(
+    if (!database || !messagesRef) {
+      setIsLoading(false);
+      return;
+    }
+
+    onValue(
       messagesRef,
       (snapshot) => {
         if (snapshot.exists()) {
@@ -101,15 +151,17 @@ export const useRealtimeChat = () => {
     }, 3600000);
 
     return () => {
-      off(messagesRef);
+      if (messagesRef) {
+        off(messagesRef);
+      }
       if (cleanupIntervalRef.current) {
         clearInterval(cleanupIntervalRef.current);
       }
     };
-  }, []);
+  }, [database, messagesRef]);
 
   const sendMessage = async (message: string): Promise<boolean> => {
-    if (!user || !message.trim()) {
+    if (!user || !message.trim() || !database || !messagesRef) {
       return false;
     }
 
@@ -131,6 +183,9 @@ export const useRealtimeChat = () => {
   return {
     messages,
     isLoading,
+    isLoadingMore,
+    hasMoreMessages,
+    loadOlderMessages,
     sendMessage,
   };
 };

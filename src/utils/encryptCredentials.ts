@@ -1,7 +1,6 @@
 import CryptoJS from 'crypto-js';
 
 const SECRET_KEY = import.meta.env.VITE_ENCRYPTION_KEY || 'battlemanager-secret-key-2026';
-const PASSWORD_SALT = import.meta.env.VITE_PASSWORD_SALT || 'battlemanager-password-salt-2026';
 
 /**
  * Encrypt credentials using AES encryption

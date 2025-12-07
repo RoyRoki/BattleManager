@@ -4,7 +4,7 @@ import { collection, query, where, addDoc } from 'firebase/firestore';
 import { firestore } from '../services/firebaseService';
 import { useAuth } from '../contexts/AuthContext';
 import { usePoints } from '../contexts/PointsContext';
-import { generateAddMoneyUPIString, PAYMENT_APPS, generatePaymentAppIntent } from '../services/upiService';
+import { PAYMENT_APPS, generatePaymentAppIntent } from '../services/upiService';
 import { withdrawalSchema } from '../utils/validations';
 import { MIN_WITHDRAW, PRESET_WITHDRAWAL_AMOUNTS } from '../utils/constants';
 import { useAppSettings } from '../hooks/useAppSettings';

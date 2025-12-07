@@ -75,10 +75,21 @@ export const paymentSchema = z.object({
   proof_url: z.string().url('Invalid proof URL'),
 });
 
+// Bank account number validation (9-18 digits)
+export const bankAccountSchema = z
+  .string()
+  .regex(/^\d{9,18}$/, 'Bank account number must be 9-18 digits');
+
+// IFSC code validation (4 letters + 0 + 6 alphanumeric)
+export const ifscSchema = z
+  .string()
+  .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'IFSC code must be in format ABCD0123456');
+
 // Withdrawal request schema
 export const withdrawalSchema = z.object({
   amount: paymentAmountSchema,
-  upi_id: upiIdSchema,
+  bank_account_no: bankAccountSchema,
+  ifsc_code: ifscSchema,
 });
 
 // Password validation (min 8 chars, uppercase, lowercase, number)

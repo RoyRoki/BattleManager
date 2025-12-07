@@ -27,7 +27,7 @@ export const HomePage: React.FC = () => {
 
   // Query banners - filter active banners server-side
   // Only query if firestore is initialized
-  const [banners, bannersLoading, bannersError] = useCollection(
+  const [banners, bannersLoading] = useCollection(
     firestore && import.meta.env.VITE_FIREBASE_PROJECT_ID
       ? query(
           collection(firestore, 'banners'),

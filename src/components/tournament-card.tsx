@@ -86,7 +86,8 @@ const formatStatusText = (status: TournamentStatus): string => {
     case 'cancelled':
       return 'Cancelled';
     default:
-      return status.charAt(0).toUpperCase() + status.slice(1);
+      // TypeScript exhaustiveness check - this should never happen
+      return String(status);
   }
 };
 

@@ -133,9 +133,6 @@ export const TournamentDetailPage: React.FC = () => {
           className="bg-bg-secondary border border-gray-800 rounded-lg p-6 mb-6"
         >
           <h1 className="text-3xl font-heading text-primary mb-4">{tournament.name}</h1>
-          {tournament.description && (
-            <p className="text-gray-300 mb-4">{tournament.description}</p>
-          )}
 
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div className="bg-bg rounded-lg p-4">
