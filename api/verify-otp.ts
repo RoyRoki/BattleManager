@@ -362,6 +362,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         remainingAttempts,
       });
     }
+    } catch (firebaseError: any) {
+      // Catch errors from Firebase operations
+      console.error('verify-otp: Firebase/OTP verification error:', firebaseError);
+      console.error('verify-otp: Error details:', {
+        message: firebaseError.message,
+        code: firebaseError.code,
+        name: firebaseError.name,
+        stack: firebaseError.stack?.substring(0, 500),
+      });
+      
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to verify OTP. Please try again.',
+        errorCode: 'VERIFICATION_ERROR',
+        details: process.env.NODE_ENV === 'development' ? {
+          message: firebaseError.message,
+        } : undefined,
+      });
+    }
   } catch (error: any) {
     // This catch block handles any errors not caught by inner try-catch blocks
     console.error('verify-otp: Unexpected top-level error:', error);
