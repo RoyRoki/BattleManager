@@ -324,7 +324,7 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
         return newMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
       });
       
-      const pushResult = await push(messagesRef, {
+      await push(messagesRef, {
         user_email: isAdmin ? 'admin' : (user?.email || ''),
         user_name: isAdmin ? 'Admin' : (user?.name || user?.email || 'User'),
         message: message.trim(),
