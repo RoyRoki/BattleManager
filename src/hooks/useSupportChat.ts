@@ -86,9 +86,39 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
             };
           })
           .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-        setMessages(messageList);
+        
+        // Merge real messages with recent temp messages that haven't been replaced yet
+        setMessages((prevMessages) => {
+          const tempMessages = prevMessages.filter(msg => msg.id.startsWith('temp-'));
+          if (tempMessages.length === 0) {
+            return messageList;
+          }
+          
+          // Keep temp messages that are very recent (within last 10 seconds) and don't match real messages
+          const now = Date.now();
+          const recentTempMessages = tempMessages.filter(tempMsg => {
+            const isRecent = (now - tempMsg.timestamp.getTime()) < 10000; // Within 10 seconds
+            if (!isRecent) return false;
+            
+            // Check if there's a matching real message (same content, same sender, within 5 seconds)
+            const hasMatch = messageList.some(realMsg => {
+              const timeDiff = Math.abs(realMsg.timestamp.getTime() - tempMsg.timestamp.getTime());
+              const contentMatch = realMsg.message === tempMsg.message && 
+                                  realMsg.image_url === tempMsg.image_url &&
+                                  realMsg.is_admin === tempMsg.is_admin;
+              return contentMatch && timeDiff < 5000;
+            });
+            
+            return !hasMatch; // Keep if no match found
+          });
+          
+          // Combine and sort
+          const allMessages = [...messageList, ...recentTempMessages];
+          return allMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+        });
       } else {
-        setMessages([]);
+        // Clear messages except temp ones (in case message was just sent)
+        setMessages((prevMessages) => prevMessages.filter(msg => msg.id.startsWith('temp-')));
       }
         setIsLoading(false);
       },
@@ -277,7 +307,24 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
       const chatPath = `support_chats/${sanitizedEmail}/messages`;
       const messagesRef = ref(database, chatPath);
       
-      await push(messagesRef, {
+      // Create optimistic message for immediate UI update
+      const optimisticMessage: ChatMessage = {
+        id: `temp-${Date.now()}`,
+        user_email: isAdmin ? 'admin' : (user?.email || ''),
+        user_name: isAdmin ? 'Admin' : (user?.name || user?.email || 'User'),
+        message: message.trim(),
+        timestamp: new Date(),
+        is_admin: isAdmin || false,
+        message_type: 'text',
+      };
+
+      // Optimistically add message to local state
+      setMessages((prevMessages) => {
+        const newMessages = [...prevMessages, optimisticMessage];
+        return newMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      });
+      
+      const pushResult = await push(messagesRef, {
         user_email: isAdmin ? 'admin' : (user?.email || ''),
         user_name: isAdmin ? 'Admin' : (user?.name || user?.email || 'User'),
         message: message.trim(),
@@ -304,6 +351,8 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
       return true;
     } catch (error) {
       console.error('Error sending support message:', error);
+      // Remove optimistic message on error
+      setMessages((prevMessages) => prevMessages.filter(msg => !msg.id.startsWith('temp-')));
       return false;
     }
   };
@@ -338,6 +387,24 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
       const chatPath = `support_chats/${sanitizedEmail}/messages`;
       const messagesRef = ref(database, chatPath);
       
+      // Create optimistic message for immediate UI update
+      const optimisticMessage: ChatMessage = {
+        id: `temp-${Date.now()}`,
+        user_email: isAdmin ? 'admin' : (user?.email || ''),
+        user_name: isAdmin ? 'Admin' : (user?.name || user?.email || 'User'),
+        message: '',
+        image_url: imageUrl,
+        timestamp: new Date(),
+        is_admin: isAdmin || false,
+        message_type: 'image',
+      };
+
+      // Optimistically add message to local state
+      setMessages((prevMessages) => {
+        const newMessages = [...prevMessages, optimisticMessage];
+        return newMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      });
+      
       await push(messagesRef, {
         user_email: isAdmin ? 'admin' : (user?.email || ''),
         user_name: isAdmin ? 'Admin' : (user?.name || user?.email || 'User'),
@@ -367,6 +434,8 @@ export const useSupportChat = (options?: UseSupportChatOptions) => {
       return true;
     } catch (error) {
       console.error('Error sending image message:', error);
+      // Remove optimistic message on error
+      setMessages((prevMessages) => prevMessages.filter(msg => !msg.id.startsWith('temp-')));
       setIsUploading(false);
       return false;
     }

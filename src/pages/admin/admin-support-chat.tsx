@@ -255,7 +255,7 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, isSelected, onClick }
       whileHover={{ backgroundColor: 'rgba(255, 186, 0, 0.1)' }}
       onClick={onClick}
       className={`w-full p-4 text-left transition-colors ${
-        isSelected ? 'bg-primary/20 border-l-4 border-primary' : 'hover:bg-gray-800/50'
+        isSelected ? 'bg-gray-800/60 border-l-4 border-primary/50' : 'hover:bg-gray-800/50'
       }`}
     >
       <div className="flex items-start gap-3">
