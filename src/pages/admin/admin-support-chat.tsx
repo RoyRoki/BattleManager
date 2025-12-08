@@ -102,7 +102,7 @@ export const AdminSupportChat: React.FC = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search users..."
-                  className="w-full bg-bg border border-gray-700 rounded-lg pl-10 pr-10 py-2 focus:outline-none focus:border-primary text-white placeholder-gray-500"
+                  className="w-full bg-bg border border-gray-700 rounded-lg pl-10 pr-10 py-2 focus:outline-none focus:border-gray-600 text-white placeholder-gray-500"
                 />
                 {searchQuery && (
                   <button
@@ -127,15 +127,25 @@ export const AdminSupportChat: React.FC = () => {
                   <p>{searchQuery ? 'No chats found' : 'No support chats yet'}</p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-800">
-                  {filteredChats.map((chat) => (
-                    <ChatListItem
-                      key={chat.user_email}
-                      chat={chat}
-                      isSelected={selectedChat === chat.user_email}
-                      onClick={() => handleSelectChat(chat.user_email)}
-                    />
-                  ))}
+                <div>
+                  {filteredChats.map((chat, index) => {
+                    const isSelected = selectedChat === chat.user_email;
+                    const prevIsSelected = index > 0 && selectedChat === filteredChats[index - 1]?.user_email;
+                    const nextIsSelected = index < filteredChats.length - 1 && selectedChat === filteredChats[index + 1]?.user_email;
+                    // For selected items, never show borders
+                    const showTopBorder = isSelected ? false : (index > 0 && !prevIsSelected);
+                    const showBottomBorder = isSelected ? false : (index < filteredChats.length - 1 && !nextIsSelected);
+                    return (
+                      <ChatListItem
+                        key={chat.user_email}
+                        chat={chat}
+                        isSelected={isSelected}
+                        onClick={() => handleSelectChat(chat.user_email)}
+                        showTopBorder={showTopBorder}
+                        showBottomBorder={showBottomBorder}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -196,7 +206,7 @@ export const AdminSupportChat: React.FC = () => {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search users..."
-                      className="w-full bg-bg border border-gray-700 rounded-lg pl-10 pr-10 py-2 focus:outline-none focus:border-primary text-white placeholder-gray-500"
+                      className="w-full bg-bg border border-gray-700 rounded-lg pl-10 pr-10 py-2 focus:outline-none focus:border-gray-600 text-white placeholder-gray-500"
                     />
                     {searchQuery && (
                       <button
@@ -221,15 +231,25 @@ export const AdminSupportChat: React.FC = () => {
                       <p>{searchQuery ? 'No chats found' : 'No support chats yet'}</p>
                     </div>
                   ) : (
-                    <div className="divide-y divide-gray-800">
-                      {filteredChats.map((chat) => (
-                        <ChatListItem
-                          key={chat.user_email}
-                          chat={chat}
-                          isSelected={false}
-                          onClick={() => handleSelectChat(chat.user_email)}
-                        />
-                      ))}
+                    <div>
+                      {filteredChats.map((chat, index) => {
+                        const isSelected = selectedChat === chat.user_email;
+                        const prevIsSelected = index > 0 && selectedChat === filteredChats[index - 1]?.user_email;
+                        const nextIsSelected = index < filteredChats.length - 1 && selectedChat === filteredChats[index + 1]?.user_email;
+                        // For selected items, never show borders
+                        const showTopBorder = isSelected ? false : (index > 0 && !prevIsSelected);
+                        const showBottomBorder = isSelected ? false : (index < filteredChats.length - 1 && !nextIsSelected);
+                        return (
+                          <ChatListItem
+                            key={chat.user_email}
+                            chat={chat}
+                            isSelected={isSelected}
+                            onClick={() => handleSelectChat(chat.user_email)}
+                            showTopBorder={showTopBorder}
+                            showBottomBorder={showBottomBorder}
+                          />
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -247,16 +267,24 @@ interface ChatListItemProps {
   chat: SupportChat;
   isSelected: boolean;
   onClick: () => void;
+  showTopBorder?: boolean;
+  showBottomBorder?: boolean;
 }
 
-const ChatListItem: React.FC<ChatListItemProps> = ({ chat, isSelected, onClick }) => {
+const ChatListItem: React.FC<ChatListItemProps> = ({ chat, isSelected, onClick, showTopBorder = true, showBottomBorder = true }) => {
+  const baseClasses = 'w-full p-4 text-left transition-colors';
+  const selectedClasses = 'bg-gray-800/60 border-l-4 border-primary/50 !border-t-0 !border-b-0 !border-t-transparent !border-b-transparent';
+  const unselectedClasses = [
+    showTopBorder ? 'border-t border-gray-800' : 'border-t-0',
+    showBottomBorder ? 'border-b border-gray-800' : 'border-b-0',
+    'hover:bg-gray-800/50'
+  ].filter(Boolean).join(' ');
+
   return (
     <motion.button
       whileHover={{ backgroundColor: 'rgba(255, 186, 0, 0.1)' }}
       onClick={onClick}
-      className={`w-full p-4 text-left transition-colors ${
-        isSelected ? 'bg-gray-800/60 border-l-4 border-primary/50' : 'hover:bg-gray-800/50'
-      }`}
+      className={`${baseClasses} ${isSelected ? selectedClasses : unselectedClasses}`}
     >
       <div className="flex items-start gap-3">
         {/* Avatar */}
