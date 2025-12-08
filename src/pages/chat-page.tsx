@@ -8,7 +8,7 @@ export const ChatPage: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-bg pb-20">
+    <div className="min-h-screen bg-bg pb-16">
       <div className="container mx-auto px-4 py-6">
         {/* Back Button and Title */}
         <div className="flex items-center gap-4 mb-6">
@@ -33,7 +33,7 @@ export const ChatPage: React.FC = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-bg-secondary border border-gray-800 rounded-xl overflow-hidden shadow-2xl shadow-black/50 h-[calc(100vh-200px)]"
+          className="bg-bg-secondary border border-gray-800 rounded-xl overflow-hidden shadow-2xl shadow-black/50 h-[calc(100vh-180px)]"
         >
           <ChatInterface />
         </motion.div>

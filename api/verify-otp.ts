@@ -404,13 +404,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     return res.status(500).json({
       success: false,
-      error: 'Internal server error',
-      message: error.message,
+      error: 'An unexpected error occurred. Please try again later.',
       errorCode: 'UNEXPECTED_ERROR',
-      details: process.env.NODE_ENV === 'development' ? {
-        message: error.message,
-        stack: error.stack?.substring(0, 500),
-      } : undefined,
     });
   }
 }

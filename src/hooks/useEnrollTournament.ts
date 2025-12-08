@@ -4,22 +4,9 @@ import { firestore } from '../services/firebaseService';
 import { useFirestoreTransaction } from './useFirestoreTransaction';
 import { useAuth } from '../contexts/AuthContext';
 import { usePoints } from '../contexts/PointsContext';
-import { Tournament, TournamentStatus } from '../types';
+import { Tournament } from '../types';
 import toast from 'react-hot-toast';
-
-// Compute effective status based on reveal_time
-const getEffectiveStatus = (tournament: Tournament): TournamentStatus => {
-  if (tournament.status === 'completed' || tournament.status === 'cancelled') {
-    return tournament.status;
-  }
-  if (tournament.status === 'upcoming' && tournament.reveal_time) {
-    const now = new Date();
-    if (now >= new Date(tournament.reveal_time)) {
-      return 'live';
-    }
-  }
-  return tournament.status;
-};
+import { getUserFriendlyError } from '../shared/utils/errorHandler';
 
 export const useEnrollTournament = () => {
   const { user } = useAuth();
@@ -48,11 +35,20 @@ export const useEnrollTournament = () => {
       return false;
     }
 
-    // Use effective status to allow enrollment in auto-live tournaments
-    const effectiveStatus = getEffectiveStatus(tournament);
-    if (effectiveStatus !== 'upcoming' && effectiveStatus !== 'live') {
+    // Check if tournament status is upcoming
+    if (tournament.status !== 'upcoming') {
       toast.error('Tournament is not available for enrollment');
       return false;
+    }
+
+    // Check if start_time has passed - if so, prevent enrollment
+    if (tournament.start_time) {
+      const now = new Date();
+      const startTime = new Date(tournament.start_time);
+      if (now >= startTime) {
+        toast.error('Tournament has already started. Enrollment is closed.');
+        return false;
+      }
     }
 
     setIsEnrolling(true);
@@ -87,7 +83,8 @@ export const useEnrollTournament = () => {
       return true;
     } catch (error: any) {
       console.error('Enrollment error:', error);
-      toast.error(error.message || 'Failed to enroll');
+      const friendlyError = getUserFriendlyError(error, 'tournament', 'Failed to enroll in tournament. Please try again.');
+      toast.error(friendlyError);
       return false;
     } finally {
       setIsEnrolling(false);

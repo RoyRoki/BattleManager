@@ -10,6 +10,7 @@ import { decryptCredentials } from '../utils/encryptCredentials';
 import { useAuth } from '../contexts/AuthContext';
 import { HiArrowLeft, HiFire, HiClipboardCopy, HiLockClosed, HiLockOpen, HiEye, HiEyeOff } from 'react-icons/hi';
 import toast from 'react-hot-toast';
+import { useCountdown } from '../hooks/useCountdown';
 
 // Compute effective status based on reveal_time and start_time
 const getEffectiveStatus = (tournament: Tournament): TournamentStatus => {
@@ -88,6 +89,11 @@ export const TournamentDetailPage: React.FC = () => {
   } as Tournament;
 
   const effectiveStatus = getEffectiveStatus(tournament);
+  const countdown = useCountdown(tournament.start_time);
+  
+  // Check if enrollment is allowed (status must be upcoming and start_time hasn't passed)
+  const enrollmentAllowed = tournament.status === 'upcoming' && 
+    (tournament.start_time ? !countdown.isExpired : true);
 
   // User can view credentials if:
   // 1. User is enrolled AND
@@ -189,21 +195,29 @@ export const TournamentDetailPage: React.FC = () => {
             </div>
 
             <div className="flex items-center justify-between mb-3">
-              <span
-                className={`text-xs px-2 py-1 rounded font-heading ${
-                  effectiveStatus === 'upcoming'
-                    ? 'bg-orange-900 text-orange-300'
-                    : effectiveStatus === 'live'
-                    ? 'bg-green-900 text-green-300 animate-pulse'
-                    : effectiveStatus === 'completed'
-                    ? 'bg-blue-900 text-blue-300'
-                    : effectiveStatus === 'cancelled'
-                    ? 'bg-red-900 text-red-300'
-                    : 'bg-gray-800 text-gray-400'
-                }`}
-              >
-                {effectiveStatus === 'live' ? 'Live Now' : effectiveStatus === 'upcoming' ? 'Upcoming' : effectiveStatus === 'completed' ? 'Completed' : effectiveStatus === 'cancelled' ? 'Cancelled' : effectiveStatus}
-              </span>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`text-xs px-2 py-1 rounded font-heading ${
+                    effectiveStatus === 'upcoming'
+                      ? 'bg-orange-900 text-orange-300'
+                      : effectiveStatus === 'live'
+                      ? 'bg-green-900 text-green-300 animate-pulse'
+                      : effectiveStatus === 'completed'
+                      ? 'bg-blue-900 text-blue-300'
+                      : effectiveStatus === 'cancelled'
+                      ? 'bg-red-900 text-red-300'
+                      : 'bg-gray-800 text-gray-400'
+                  }`}
+                >
+                  {effectiveStatus === 'live' ? 'Live Now' : effectiveStatus === 'upcoming' ? 'Upcoming' : effectiveStatus === 'completed' ? 'Completed' : effectiveStatus === 'cancelled' ? 'Cancelled' : effectiveStatus}
+                </span>
+                {/* Countdown Label */}
+                {countdown.showLabel && enrollmentAllowed && (
+                  <span className="text-xs px-2 py-1 bg-orange-600/30 border border-orange-500 rounded text-orange-300 font-heading animate-pulse">
+                    ⏰ {countdown.showLabel} left!
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -375,7 +389,8 @@ const KillLeaderboard: React.FC<KillLeaderboardProps> = ({ tournament, currentUs
       });
     });
 
-    const pointsPerKill = tournament.payment_info?.points_per_kill || 10;
+    // Priority: per_kill_point (from edit form) > payment_info.points_per_kill (from kill list save) > default 10
+    const pointsPerKill = tournament.per_kill_point ?? tournament.payment_info?.points_per_kill ?? 10;
 
     return Object.entries(tournament.player_kills)
       .map(([email, data]) => {

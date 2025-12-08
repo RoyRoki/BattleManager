@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useOTP } from '../hooks/useOTP';
 import { emailSchema } from '../utils/validations';
 import toast from 'react-hot-toast';
+import { getUserFriendlyError } from '../shared/utils/errorHandler';
 
 interface OTPModalProps {
   isOpen: boolean;
@@ -31,7 +32,8 @@ export const OTPModal: React.FC<OTPModalProps> = ({ isOpen, onClose, onSuccess }
         setStep('otp');
       }
     } catch (error: any) {
-      toast.error(error.message || 'Invalid email address');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Invalid email address. Please check and try again.');
+      toast.error(friendlyError);
     }
   };
 

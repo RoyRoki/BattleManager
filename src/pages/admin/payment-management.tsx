@@ -261,6 +261,11 @@ export const PaymentManagement: React.FC = () => {
                                 <p className="text-sm text-cyan-300 font-mono break-all">{payment.transaction_id}</p>
                               </div>
                             )}
+                            {payment.notes && (
+                              <div className="mt-2 p-2 bg-yellow-900/20 border border-yellow-600/50 rounded-lg">
+                                <p className="text-sm text-yellow-300 font-heading">{payment.notes}</p>
+                              </div>
+                            )}
                             <p className="text-xs text-gray-500 mt-2">
                               {payment.created_at.toLocaleString()}
                             </p>

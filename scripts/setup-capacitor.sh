@@ -46,3 +46,5 @@ echo "2. Configure app icon and branding (see android-build.md)"
 echo "3. Run 'npm run cap:open' to open in Android Studio"
 echo "4. Build your APK in Android Studio (see android-build.md for details)"
 
+
+

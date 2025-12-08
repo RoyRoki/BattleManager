@@ -2,6 +2,7 @@ import { runTransaction } from 'firebase/firestore';
 import { firestore } from '../services/firebaseService';
 import { doc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { getUserFriendlyError } from '../shared/utils/errorHandler';
 
 /**
  * Hook for Firestore transactions
@@ -18,7 +19,8 @@ export const useFirestoreTransaction = () => {
       return result;
     } catch (error: any) {
       console.error('Transaction error:', error);
-      toast.error(error.message || 'Transaction failed');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Transaction could not be completed. Please try again.');
+      toast.error(friendlyError);
       return null;
     }
   };

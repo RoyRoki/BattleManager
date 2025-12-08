@@ -86,16 +86,18 @@ export const useRealtimeChat = () => {
         limitToLast(50)
       );
 
-      const snapshot = await get(olderMessagesQuery);
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        const olderMessages: ChatMessage[] = Object.keys(data)
-          .map((key) => ({
-            id: key,
-            ...data[key],
-            timestamp: new Date(data[key].timestamp),
-          }))
-          .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+        const snapshot = await get(olderMessagesQuery);
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          const olderMessages: ChatMessage[] = Object.keys(data)
+            .map((key) => ({
+              id: key,
+              ...data[key],
+              // Map user_mobile to user_email for backward compatibility
+              user_email: data[key].user_email || data[key].user_mobile || '',
+              timestamp: new Date(data[key].timestamp),
+            }))
+            .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
         if (olderMessages.length > 0) {
           setMessages((prev) => [...olderMessages, ...prev]);
@@ -127,6 +129,8 @@ export const useRealtimeChat = () => {
             .map((key) => ({
               id: key,
               ...data[key],
+              // Map user_mobile to user_email for backward compatibility
+              user_email: data[key].user_email || data[key].user_mobile || '',
               timestamp: new Date(data[key].timestamp),
             }))
             .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
@@ -167,7 +171,7 @@ export const useRealtimeChat = () => {
 
     try {
       await push(messagesRef, {
-        user_mobile: user.email,
+        user_email: user.email,
         user_name: user.name || user.email,
         message: message.trim(),
         timestamp: serverTimestamp(),

@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../utils/constants';
 import toast from 'react-hot-toast';
+import { getUserFriendlyError } from '../../shared/utils/errorHandler';
 
 export const AdminLoginPage: React.FC = () => {
   const { adminLogin } = useAuth();
@@ -27,7 +28,8 @@ export const AdminLoginPage: React.FC = () => {
       toast.success('Admin login successful!');
       navigate(ROUTES.ADMIN_DASHBOARD);
     } catch (error: any) {
-      toast.error(error.message || 'Invalid admin credentials');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Invalid admin credentials. Please check your email and password.');
+      toast.error(friendlyError);
     } finally {
       setIsLoading(false);
     }

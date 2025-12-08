@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { uploadImage } from '../services/cloudinaryService';
 import toast from 'react-hot-toast';
+import { getUserFriendlyError } from '../shared/utils/errorHandler';
 
 interface PaymentProofUploadProps {
   onUploadSuccess: (url: string) => void;
@@ -46,8 +47,9 @@ export const PaymentProofUpload: React.FC<PaymentProofUploadProps> = ({
       toast.success('Payment proof uploaded successfully!');
     } catch (error: any) {
       console.error('Upload error:', error);
-      toast.error(error.message || 'Failed to upload image');
-      onUploadError?.(error.message || 'Upload failed');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Failed to upload image. Please try again.');
+      toast.error(friendlyError);
+      onUploadError?.(friendlyError);
       setPreview(null);
     } finally {
       setIsUploading(false);

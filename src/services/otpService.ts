@@ -1,3 +1,5 @@
+import { getUserFriendlyError } from '../shared/utils/errorHandler';
+
 /**
  * Request OTP to be sent via BREVO SMTP (via Vercel serverless function)
  * OTP is generated server-side and stored in Firebase
@@ -10,21 +12,41 @@ export const sendOTP = async (email: string): Promise<void> => {
     
     // Call Vercel serverless function - OTP is generated server-side
     console.log('sendOTP: Calling /api/send-otp endpoint');
+    
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    
     const response = await fetch('/api/send-otp', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ email }),
+      signal: controller.signal,
     });
 
+    clearTimeout(timeoutId);
     console.log('sendOTP: Response status:', response.status, response.statusText);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('sendOTP: Error response body:', errorText);
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` };
+      }
+      const errorMsg = getUserFriendlyError(errorData, undefined, 'Unable to send verification code. Please try again.');
+      throw new Error(errorMsg);
+    }
     
     const data = await response.json();
     
     // Check for success response
     if (!response.ok || !data.success) {
-      const errorMsg = data.error || 'Failed to send OTP';
+      const errorMsg = getUserFriendlyError(data, undefined, 'Unable to send verification code. Please try again.');
       console.error('sendOTP: Error response:', errorMsg);
       throw new Error(errorMsg);
     }
@@ -37,8 +59,17 @@ export const sendOTP = async (email: string): Promise<void> => {
       message: error.message,
       stack: error.stack,
       name: error.name,
+      cause: error.cause,
     });
-    throw new Error(error.message || 'Failed to send OTP. Please try again.');
+    
+    // Handle network/timeout errors specifically
+    if (error.name === 'AbortError' || error.message.includes('timeout') || error.message.includes('Failed to fetch')) {
+      const friendlyError = 'Request timed out. Please check your connection and ensure the API server is running on port 3001.';
+      throw new Error(friendlyError);
+    }
+    
+    const friendlyError = getUserFriendlyError(error, undefined, 'Unable to send verification code. Please try again.');
+    throw new Error(friendlyError);
   }
 };
 
@@ -66,13 +97,14 @@ export const verifyOTP = async (
     return {
       success: data.success === true,
       remainingAttempts: data.remainingAttempts,
-      error: data.error,
+      error: data.error ? getUserFriendlyError(data.error, undefined, 'Verification failed. Please try again.') : undefined,
     };
   } catch (error: any) {
     console.error('OTP verification error:', error);
+    const friendlyError = getUserFriendlyError(error, undefined, 'Verification failed. Please try again.');
     return {
       success: false,
-      error: error.message || 'Failed to verify OTP. Please try again.',
+      error: friendlyError,
     };
   }
 };

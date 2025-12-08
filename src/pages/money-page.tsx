@@ -12,6 +12,7 @@ import { useFirestoreTransaction } from '../hooks/useFirestoreTransaction';
 import { Payment } from '../types';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
+import { getUserFriendlyError } from '../shared/utils/errorHandler';
 
 // Preset amounts for adding money
 const PRESET_AMOUNTS = [100, 200, 500, 1000];
@@ -44,6 +45,24 @@ export const MoneyPage: React.FC = () => {
         )
       : null
   ) as unknown as [{ docs: any[] } | null, boolean]) || [null, true];
+
+  // Helper function to create automatic payment request when UPI fails
+  const createAutomaticPaymentRequest = async () => {
+    if (!user || !selectedAmount) {
+      throw new Error('User or amount not available');
+    }
+
+    await addDoc(collection(firestore, 'payments'), {
+      user_email: user.email,
+      user_name: user.name || 'Unknown',
+      amount: selectedAmount,
+      status: 'pending',
+      type: 'add_money',
+      notes: 'Check Carefully - Android payment',
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+  };
 
   const handleUPIPayment = () => {
     if (!user) {
@@ -104,11 +123,21 @@ export const MoneyPage: React.FC = () => {
       
       // Check after 2.5 seconds if user is still on the page
       // If user didn't leave, UPI app didn't open
-      failureTimeout = setTimeout(() => {
+      failureTimeout = setTimeout(async () => {
         if (!userLeftPage) {
-          console.warn('UPI payment link failed to launch, showing manual payment flow');
-          toast.error('Unable to open UPI app. Please use manual payment.', { duration: 4000 });
-          setShowIPhoneManualPayment(true);
+          console.warn('UPI payment link failed to launch, creating automatic payment request');
+          try {
+            // Create automatic payment request
+            await createAutomaticPaymentRequest();
+            // Show success message
+            toast.success('Payment request created automatically! Admin will verify and approve.', { duration: 5000 });
+            // Reset form
+            setSelectedAmount(null);
+          } catch (error: any) {
+            console.error('Error creating automatic payment request:', error);
+            toast.error('Unable to open UPI app. Please use manual payment.', { duration: 4000 });
+            setShowIPhoneManualPayment(true);
+          }
         }
         // Clean up listeners
         window.removeEventListener('blur', handleBlur);
@@ -116,8 +145,17 @@ export const MoneyPage: React.FC = () => {
       }, 2500);
     } catch (error: any) {
       console.error('Failed to open UPI link:', error);
-      toast.error('Unable to open UPI app. Please use manual payment.', { duration: 4000 });
-      setShowIPhoneManualPayment(true);
+      // Create automatic payment request
+      createAutomaticPaymentRequest().then(() => {
+        // Show success message
+        toast.success('Payment request created automatically! Admin will verify and approve.', { duration: 5000 });
+        // Reset form
+        setSelectedAmount(null);
+      }).catch((err) => {
+        console.error('Error creating payment request:', err);
+        toast.error('Unable to open UPI app. Please use manual payment.', { duration: 4000 });
+        setShowIPhoneManualPayment(true);
+      });
       // Clean up listeners
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -165,7 +203,8 @@ export const MoneyPage: React.FC = () => {
       setFieldErrors({});
     } catch (error: any) {
       console.error('Payment error:', error);
-      toast.error(error.message || 'Failed to submit payment request');
+      const friendlyError = getUserFriendlyError(error, 'payment', 'Failed to submit payment request. Please try again.');
+      toast.error(friendlyError);
     } finally {
       setIsProcessing(false);
     }
@@ -278,7 +317,8 @@ export const MoneyPage: React.FC = () => {
           toast.error(firstError);
         }
       } else {
-        toast.error(error.message || 'Failed to submit withdrawal');
+        const friendlyError = getUserFriendlyError(error, 'payment', 'Failed to submit withdrawal request. Please try again.');
+        toast.error(friendlyError);
       }
     } finally {
       setIsProcessing(false);
@@ -432,9 +472,27 @@ export const MoneyPage: React.FC = () => {
                     </div>
                   ) : (
                     <div className="bg-bg-secondary rounded-lg p-4 space-y-2">
-                      <div className="flex justify-between">
+                      <div className="flex justify-between items-center">
                         <span className="text-gray-400">UPI ID:</span>
-                        <span className="text-white font-heading">{upiId}</span>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(upiId);
+                              toast.success('UPI ID copied to clipboard!', {
+                                icon: '📋',
+                                duration: 2000,
+                              });
+                            } catch (error) {
+                              console.error('Failed to copy:', error);
+                              toast.error('Failed to copy UPI ID');
+                            }
+                          }}
+                          className="text-white font-heading hover:text-primary transition-colors bg-transparent border-none cursor-pointer"
+                          title="Click to copy UPI ID"
+                          aria-label="Copy UPI ID"
+                        >
+                          {upiId}
+                        </button>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-400">Merchant Name:</span>

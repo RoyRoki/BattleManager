@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { motion } from 'framer-motion';
+import { getUserFriendlyError } from '../shared/utils/errorHandler';
 
 interface Props {
   children: ReactNode;
@@ -34,7 +35,7 @@ class ErrorBoundary extends Component<Props, State> {
           >
             <h2 className="text-2xl font-heading text-primary mb-4">Something went wrong</h2>
             <p className="text-gray-400 mb-6">
-              {this.state.error?.message || 'An unexpected error occurred'}
+              {this.state.error ? getUserFriendlyError(this.state.error, undefined, 'An unexpected error occurred. Please reload the page.') : 'An unexpected error occurred. Please reload the page.'}
             </p>
             <button
               onClick={() => window.location.reload()}

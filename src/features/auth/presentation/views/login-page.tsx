@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useLoginViewModel } from '../viewmodels/useLoginViewModel';
-import { HiMail, HiKey, HiUser, HiIdentification, HiLockClosed } from 'react-icons/hi';
+import { HiMail, HiKey, HiUser, HiIdentification, HiLockClosed, HiDownload } from 'react-icons/hi';
 
 export const LoginPage: React.FC = () => {
   const {
@@ -59,8 +59,78 @@ export const LoginPage: React.FC = () => {
     }
   };
 
+  const APK_DOWNLOAD_URL = 'https://drive.google.com/file/d/1ZPKjkDXTSP_uS01dXrfbRgmvw-ISIPbP/view';
+
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center p-4">
+    <div className="min-h-screen bg-bg flex items-center justify-center p-4 relative">
+      {/* Download APK Button - Only show on email step */}
+      {step === 'email' && (
+        <>
+          <style>{`
+            @keyframes glow-pulse {
+              0%, 100% {
+                box-shadow: 0 0 20px rgba(255, 215, 0, 0.6), 0 0 40px rgba(255, 215, 0, 0.4), 0 0 60px rgba(255, 215, 0, 0.2);
+              }
+              50% {
+                box-shadow: 0 0 30px rgba(255, 215, 0, 0.8), 0 0 60px rgba(255, 215, 0, 0.6), 0 0 90px rgba(255, 215, 0, 0.4);
+              }
+            }
+            .glow-button {
+              animation: glow-pulse 2s ease-in-out infinite;
+            }
+            /* Force black icon - highest specificity */
+            .apk-download-btn .apk-icon-black,
+            .apk-download-btn .apk-icon-black svg,
+            .apk-download-btn .apk-icon-black svg path,
+            .apk-download-btn .apk-icon-black svg *,
+            .apk-download-btn .apk-icon-black svg[class*="text-primary"],
+            .apk-download-btn .apk-icon-black [class*="text-primary"] svg,
+            .apk-download-btn .apk-icon-black svg[class*="primary"],
+            .apk-download-btn .apk-icon-black [class*="primary"] svg,
+            .glow-button .apk-icon-black,
+            .glow-button .apk-icon-black svg,
+            .glow-button .apk-icon-black svg path,
+            .glow-button .apk-icon-black svg * {
+              color: #000000 !important;
+              fill: #000000 !important;
+              stroke: #000000 !important;
+            }
+            /* Force black icon for Continue button key icon */
+            .continue-btn-icon-black,
+            .continue-btn-icon-black svg,
+            .continue-btn-icon-black svg path,
+            .continue-btn-icon-black svg *,
+            .continue-btn-icon-black svg[class*="text-primary"],
+            .continue-btn-icon-black [class*="text-primary"] svg,
+            .continue-btn-icon-black svg[class*="primary"],
+            .continue-btn-icon-black [class*="primary"] svg,
+            button .continue-btn-icon-black,
+            button .continue-btn-icon-black svg,
+            button .continue-btn-icon-black svg path,
+            button .continue-btn-icon-black svg * {
+              color: #000000 !important;
+              fill: #000000 !important;
+              stroke: #000000 !important;
+            }
+          `}</style>
+          <motion.a
+            href={APK_DOWNLOAD_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.5, type: 'spring' }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="apk-download-btn fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-primary text-bg px-5 py-3 rounded-lg font-heading transition-all duration-300 group glow-button"
+          >
+            <div className="apk-icon-black">
+              <HiDownload className="text-xl group-hover:animate-bounce" />
+            </div>
+            <span className="text-sm font-semibold">Download APK</span>
+          </motion.a>
+        </>
+      )}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -122,7 +192,9 @@ export const LoginPage: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    <HiKey className="text-xl" />
+                    <div className="continue-btn-icon-black">
+                      <HiKey className="text-xl" />
+                    </div>
                     Continue
                   </>
                 )}
@@ -254,7 +326,7 @@ export const LoginPage: React.FC = () => {
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Min 8 chars, uppercase, lowercase, and number required
+                  Uppercase, lowercase, and number required
                 </p>
               </div>
 
@@ -379,7 +451,7 @@ export const LoginPage: React.FC = () => {
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Min 8 chars, uppercase, lowercase, and number required
+                  Uppercase, lowercase, and number required
                 </p>
               </div>
 

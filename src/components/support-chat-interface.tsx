@@ -405,18 +405,21 @@ export const SupportChatInterface: React.FC<SupportChatInterfaceProps> = ({
             disabled={(!message.trim() && !selectedImage) || isUploading || (!user && !isAdmin)}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="bg-gradient-to-r from-primary to-accent text-bg px-6 py-3 rounded-xl font-heading font-bold hover:shadow-lg hover:shadow-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2 min-w-[80px] justify-center"
+            className="bg-gradient-to-br from-primary to-accent w-12 h-12 rounded-full flex items-center justify-center hover:shadow-lg hover:shadow-primary/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:bg-gray-600 [&>svg]:!fill-black [&>svg]:!text-black [&>svg]:!stroke-none"
+            aria-label="Send message"
+            style={{ color: 'transparent' }}
           >
             {isUploading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-bg border-t-transparent rounded-full animate-spin"></div>
-                <span>Sending</span>
-              </>
+              <div className="w-5 h-5 border-2 border-bg border-t-transparent rounded-full animate-spin"></div>
             ) : (
-              <>
-                <HiPaperAirplane className="text-xl rotate-[-45deg]" />
-                <span>Send</span>
-              </>
+              <HiPaperAirplane 
+                className="text-2xl rotate-[90deg] !fill-black !text-black" 
+                style={{ 
+                  fill: '#000000', 
+                  color: '#000000',
+                  stroke: 'none'
+                }} 
+              />
             )}
           </motion.button>
         </div>

@@ -4,8 +4,9 @@ import { motion } from 'framer-motion';
 import { useOTP } from '../hooks/useOTP';
 import { useAuth } from '../contexts/AuthContext';
 import { emailSchema, userNameSchema, ffIdSchema } from '../utils/validations';
-import { HiMail, HiKey, HiUser, HiIdentification } from 'react-icons/hi';
+import { HiMail, HiKey, HiUser, HiIdentification, HiDownload } from 'react-icons/hi';
 import toast from 'react-hot-toast';
+import { getUserFriendlyError } from '../shared/utils/errorHandler';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -104,7 +105,8 @@ export const LoginPage: React.FC = () => {
     } catch (error: any) {
       console.error('Error in handleEmailSubmit:', error);
       console.error('Error stack:', error.stack);
-      toast.error(error.message || 'Invalid email address');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Invalid email address. Please check and try again.');
+      toast.error(friendlyError);
     } finally {
       // Always clear the checking state
       setIsCheckingUser(false);
@@ -129,7 +131,8 @@ export const LoginPage: React.FC = () => {
       setStep('otp');
     } catch (error: any) {
       console.error('Error in handleSignupSubmit:', error);
-      toast.error(error.message || 'Please check your input');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Please check your input and try again.');
+      toast.error(friendlyError);
     }
   };
 
@@ -160,7 +163,8 @@ export const LoginPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Error in handleOTPSubmit:', error);
-      toast.error(error.message || 'Failed to verify OTP');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Verification failed. Please try again.');
+      toast.error(friendlyError);
     }
   };
 
@@ -191,8 +195,42 @@ export const LoginPage: React.FC = () => {
     }
   }, [step, isLoading, isCheckingUser, email]);
 
+  const APK_DOWNLOAD_URL = 'https://drive.google.com/file/d/1ZPKjkDXTSP_uS01dXrfbRgmvw-ISIPbP/view';
+
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center p-4">
+    <div className="min-h-screen bg-bg flex items-center justify-center p-4 relative">
+      {/* Download APK Button - Only show on email step */}
+      {step === 'email' && (
+        <>
+          <style>{`
+            @keyframes glow-pulse {
+              0%, 100% {
+                box-shadow: 0 0 20px rgba(0, 255, 65, 0.6), 0 0 40px rgba(0, 255, 65, 0.4), 0 0 60px rgba(0, 255, 65, 0.2);
+              }
+              50% {
+                box-shadow: 0 0 30px rgba(0, 255, 65, 0.8), 0 0 60px rgba(0, 255, 65, 0.6), 0 0 90px rgba(0, 255, 65, 0.4);
+              }
+            }
+            .glow-button {
+              animation: glow-pulse 2s ease-in-out infinite;
+            }
+          `}</style>
+          <motion.a
+            href={APK_DOWNLOAD_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.5, type: 'spring' }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-primary text-bg px-5 py-3 rounded-lg font-heading transition-all duration-300 group glow-button"
+          >
+            <HiDownload className="text-xl group-hover:animate-bounce" />
+            <span className="text-sm font-semibold">Download APK</span>
+          </motion.a>
+        </>
+      )}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

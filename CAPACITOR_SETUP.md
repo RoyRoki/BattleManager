@@ -188,3 +188,5 @@ Run `npx cap add android` to add the platform.
 - Offline detection is handled by the `OfflineBanner` component
 - Package name: `com.battlemanager.app`
 
+
+

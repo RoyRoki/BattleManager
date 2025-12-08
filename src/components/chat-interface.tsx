@@ -8,6 +8,7 @@ import { groupMessagesByDate, formatMessageTime, formatFullTimestamp } from '../
 import { ChatMessage } from '../types';
 import toast from 'react-hot-toast';
 import { HiPaperAirplane } from 'react-icons/hi';
+import { getUserFriendlyError } from '../shared/utils/errorHandler';
 
 interface MessageGroup {
   date: Date;
@@ -108,9 +109,11 @@ export const ChatInterface: React.FC = () => {
   useEffect(() => {
     if (messages.length > previousMessagesLengthRef.current) {
       const newMessages = messages.slice(previousMessagesLengthRef.current);
-      const hasReceivedMessage = newMessages.some(
-        (msg) => msg.user_email !== user?.email
-      );
+      const userEmail = user?.email?.toLowerCase().trim() || '';
+      const hasReceivedMessage = newMessages.some((msg) => {
+        const msgEmail = msg.user_email?.toLowerCase().trim() || '';
+        return msgEmail !== userEmail;
+      });
       if (hasReceivedMessage) {
         playMessageReceived();
       }
@@ -141,7 +144,8 @@ export const ChatInterface: React.FC = () => {
         setTimeout(() => scrollToBottom(true), 100);
       }
     } catch (error: any) {
-      toast.error(error.message || 'Invalid message');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Failed to send message. Please try again.');
+      toast.error(friendlyError);
     }
   };
 
@@ -208,8 +212,10 @@ export const ChatInterface: React.FC = () => {
 
               {/* Messages in Group */}
               {group.messages.map((msg) => {
-                const isOwnMessage = msg.user_email === user?.email;
-                const showAvatar = !isOwnMessage;
+                // Normalize emails for comparison (case-insensitive)
+                const msgEmail = msg.user_email?.toLowerCase().trim() || '';
+                const userEmail = user?.email?.toLowerCase().trim() || '';
+                const isOwnMessage = msgEmail === userEmail;
                 const isAdmin = msg.is_admin;
 
                 return (
@@ -219,19 +225,19 @@ export const ChatInterface: React.FC = () => {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2 }}
-                    className={`flex items-end gap-2 ${
+                    className={`flex items-end gap-2 w-full ${
                       isOwnMessage ? 'justify-end' : 'justify-start'
                     }`}
                   >
-                    {/* Avatar (only for other users) */}
-                    {showAvatar && (
+                    {/* Avatar (only for other users, on the left) */}
+                    {!isOwnMessage && (
                       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-bg font-heading text-xs font-bold border-2 border-gray-800">
-                        {msg.user_name?.[0]?.toUpperCase() || msg.user_email[0]}
+                        {msg.user_name?.[0]?.toUpperCase() || msg.user_email?.[0]?.toUpperCase() || '?'}
                       </div>
                     )}
 
                     {/* Message Bubble */}
-                    <div className={`flex flex-col max-w-[75%] ${isOwnMessage ? 'items-end' : 'items-start'}`}>
+                    <div className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'} max-w-[75%]`}>
                       {/* Username (only for other users) */}
                       {!isOwnMessage && (
                         <div className="text-xs text-gray-400 mb-1 px-2 flex items-center gap-1">
@@ -276,7 +282,7 @@ export const ChatInterface: React.FC = () => {
                       </motion.div>
                     </div>
 
-                    {/* Spacer for own messages */}
+                    {/* Spacer for alignment - avatar space for own messages on the right */}
                     {isOwnMessage && <div className="flex-shrink-0 w-8"></div>}
                   </motion.div>
                 );
@@ -291,14 +297,14 @@ export const ChatInterface: React.FC = () => {
 
       {/* Input Form */}
       <form onSubmit={handleSend} className="border-t border-gray-800 bg-bg-secondary/50 backdrop-blur-sm p-4">
-        <div className="flex gap-2 items-end">
+        <div className="flex gap-3 items-center">
           <div className="flex-1 relative">
             <input
               type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Type a message..."
-              className="w-full bg-bg-secondary border border-gray-700 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-body text-white placeholder-gray-500"
+              className="w-full bg-bg-secondary border border-gray-700 rounded-full px-4 py-3 pr-20 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-body text-white placeholder-gray-500"
               maxLength={500}
               autoComplete="off"
             />
@@ -311,10 +317,18 @@ export const ChatInterface: React.FC = () => {
             disabled={!message.trim() || !user}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="bg-gradient-to-r from-primary to-accent text-bg px-6 py-3 rounded-xl font-heading font-bold hover:shadow-lg hover:shadow-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2 min-w-[80px] justify-center"
+            className="bg-gradient-to-br from-primary to-accent w-12 h-12 rounded-full flex items-center justify-center hover:shadow-lg hover:shadow-primary/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:bg-gray-600 [&>svg]:!fill-black [&>svg]:!text-black [&>svg]:!stroke-none"
+            aria-label="Send message"
+            style={{ color: 'transparent' }}
           >
-            <HiPaperAirplane className="text-lg" />
-            <span>Send</span>
+            <HiPaperAirplane 
+              className="text-2xl rotate-[90deg] !fill-black !text-black" 
+              style={{ 
+                fill: '#000000', 
+                color: '#000000',
+                stroke: 'none'
+              }} 
+            />
           </motion.button>
         </div>
       </form>

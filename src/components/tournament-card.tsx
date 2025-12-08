@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Tournament, TournamentStatus } from '../types';
 import { EnrollButton } from './enroll-button';
+import { useCountdown } from '../hooks/useCountdown';
 
 interface TournamentCardProps {
   tournament: Tournament;
@@ -48,6 +49,11 @@ export const TournamentCard: React.FC<TournamentCardProps> = ({ tournament, onEn
   const progress = (tournament.current_players / tournament.max_players) * 100;
   const isFull = tournament.current_players >= tournament.max_players;
   const effectiveStatus = getEffectiveStatus(tournament);
+  const countdown = useCountdown(tournament.start_time);
+  
+  // Check if enrollment is allowed (status must be upcoming and start_time hasn't passed)
+  const enrollmentAllowed = tournament.status === 'upcoming' && 
+    (tournament.start_time ? !countdown.isExpired : true);
 
   const handleCardClick = (e: React.MouseEvent) => {
     // Prevent navigation if clicking on the enroll button or its container
@@ -111,21 +117,29 @@ export const TournamentCard: React.FC<TournamentCardProps> = ({ tournament, onEn
           </div>
 
           <div className="flex items-center justify-between mb-3">
-            <span
-              className={`text-xs px-2 py-1 rounded font-heading ${
-                effectiveStatus === 'upcoming'
-                  ? 'bg-orange-900 text-orange-300'
-                  : effectiveStatus === 'live'
-                  ? 'bg-green-900 text-green-300 animate-pulse'
-                  : effectiveStatus === 'completed'
-                  ? 'bg-blue-900 text-blue-300'
-                  : effectiveStatus === 'cancelled'
-                  ? 'bg-red-900 text-red-300'
-                  : 'bg-gray-800 text-gray-400'
-              }`}
-            >
-              {formatStatusText(effectiveStatus)}
-            </span>
+            <div className="flex items-center gap-2">
+              <span
+                className={`text-xs px-2 py-1 rounded font-heading ${
+                  effectiveStatus === 'upcoming'
+                    ? 'bg-orange-900 text-orange-300'
+                    : effectiveStatus === 'live'
+                    ? 'bg-green-900 text-green-300 animate-pulse'
+                    : effectiveStatus === 'completed'
+                    ? 'bg-blue-900 text-blue-300'
+                    : effectiveStatus === 'cancelled'
+                    ? 'bg-red-900 text-red-300'
+                    : 'bg-gray-800 text-gray-400'
+                }`}
+              >
+                {formatStatusText(effectiveStatus)}
+              </span>
+              {/* Countdown Label */}
+              {countdown.showLabel && enrollmentAllowed && (
+                <span className="text-xs px-2 py-1 bg-orange-600/30 border border-orange-500 rounded text-orange-300 font-heading animate-pulse">
+                  ⏰ {countdown.showLabel}
+                </span>
+              )}
+            </div>
           </div>
         </motion.div>
       </Link>

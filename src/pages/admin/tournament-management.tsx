@@ -10,6 +10,7 @@ import { getSuggestedTournamentStatus } from '../../utils/dateUtils';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HiX, HiUsers, HiFilter, HiExclamationCircle, HiClipboardCopy, HiLink, HiChevronDown, HiCheck, HiOutlineFire, HiEye, HiEyeOff, HiSearch, HiCurrencyDollar, HiLockClosed } from 'react-icons/hi';
+import { getUserFriendlyError } from '../../shared/utils/errorHandler';
 
 export const TournamentManagement: React.FC = () => {
   const [tournaments, loading] = useCollection(
@@ -118,7 +119,8 @@ export const TournamentManagement: React.FC = () => {
       });
       setShowPassword(false);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to save tournament');
+      const friendlyError = getUserFriendlyError(error, 'tournament', 'Failed to save tournament. Please try again.');
+      toast.error(friendlyError);
     }
   };
 
@@ -826,7 +828,9 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
   const [killCounts, setKillCounts] = useState<Record<string, number>>({});
   const [customCredits, setCustomCredits] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
-  const [pointsPerKill, setPointsPerKill] = useState(10);
+  const [pointsPerKill, setPointsPerKill] = useState(
+    tournament.per_kill_point ?? tournament.payment_info?.points_per_kill ?? 10
+  );
   const [showCustomCreditModal, setShowCustomCreditModal] = useState<string | null>(null);
   const [showCreditConfirmModal, setShowCreditConfirmModal] = useState<string | null>(null);
   const [showPayAllConfirmModal, setShowPayAllConfirmModal] = useState(false);
@@ -894,10 +898,13 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
     if (tournament.payment_info?.custom_credits) {
       setCustomCredits(tournament.payment_info.custom_credits);
     }
-    if (tournament.payment_info?.points_per_kill) {
+    // Priority: per_kill_point (from edit form) > payment_info.points_per_kill (from kill list save)
+    if (tournament.per_kill_point !== undefined) {
+      setPointsPerKill(tournament.per_kill_point);
+    } else if (tournament.payment_info?.points_per_kill !== undefined) {
       setPointsPerKill(tournament.payment_info.points_per_kill);
     }
-  }, [tournament.player_kills, tournament.payment_info]);
+  }, [tournament.player_kills, tournament.payment_info, tournament.per_kill_point]);
 
   const handleKillChange = (email: string, kills: number) => {
     // Check if payment has been made
@@ -1000,7 +1007,8 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       }, 1000);
     } catch (error: any) {
       console.error('Error crediting custom points:', error);
-      toast.error(`Failed to credit custom points: ${error.message || 'Unknown error'}`);
+      const friendlyError = getUserFriendlyError(error, undefined, 'Failed to credit points. Please try again.');
+      toast.error(friendlyError);
     } finally {
       setPaying(false);
     }
@@ -1050,6 +1058,7 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
 
       await updateDoc(doc(firestore, 'tournaments', tournament.id), {
         player_kills: playerKills,
+        per_kill_point: pointsPerKill,
         updated_at: new Date(),
       });
 
@@ -1154,7 +1163,8 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       }, 1000);
     } catch (error: any) {
       console.error('Error crediting points:', error);
-      toast.error(`Failed to credit points: ${error.message || 'Unknown error'}`);
+      const friendlyError = getUserFriendlyError(error, undefined, 'Failed to credit points. Please try again.');
+      toast.error(friendlyError);
     } finally {
       setPaying(false);
     }
@@ -1241,6 +1251,7 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
             ...updatedKills,
           },
           payment_info: paymentInfo,
+          per_kill_point: pointsPerKill,
           updated_at: new Date(),
         });
 
@@ -1393,10 +1404,10 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
               <input
                 type="number"
                 value={pointsPerKill}
-                onChange={(e) => setPointsPerKill(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setPointsPerKill(Math.max(0, parseInt(e.target.value) || 0))}
                 disabled={isPaymentMade}
                 className="w-full bg-bg border border-gray-700 rounded px-2 py-1 text-primary font-heading focus:outline-none focus:border-primary disabled:opacity-50"
-                min="1"
+                min="0"
               />
             </div>
             <div>

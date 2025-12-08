@@ -41,10 +41,10 @@ export const SupportPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'faq' | 'chat'>('faq');
 
   return (
-    <div className="min-h-screen bg-bg pb-20">
-      <div className="container mx-auto px-4 py-6">
+    <div className={`min-h-screen bg-bg ${activeTab === 'chat' ? 'pb-16' : 'pb-20'}`}>
+      <div className={`container mx-auto px-4 ${activeTab === 'chat' ? 'py-4' : 'py-6'}`}>
         {/* Back Button and Title */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-4 mb-4">
           <motion.button
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -64,7 +64,7 @@ export const SupportPage: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-4">
           <button
             onClick={() => setActiveTab('faq')}
             className={`flex-1 py-2 rounded-lg font-heading transition ${
@@ -159,7 +159,7 @@ export const SupportPage: React.FC = () => {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-bg-secondary border border-gray-800 rounded-lg h-[calc(100vh-300px)] min-h-[500px]"
+            className="bg-bg-secondary border border-gray-800 rounded-lg h-[calc(100vh-180px)] min-h-[500px]"
           >
             {user ? (
               <SupportChatInterface />

@@ -5,6 +5,7 @@ import { sendOTP, verifyOTP } from '../services/otpService';
 import { emailSchema, otpSchema } from '../utils/validations';
 import { hashPassword, verifyPassword } from '../utils/encryptCredentials';
 import toast from 'react-hot-toast';
+import { getUserFriendlyError } from '../shared/utils/errorHandler';
 
 interface SignupData {
   name: string;
@@ -66,7 +67,8 @@ export const useOTP = () => {
         stack: error.stack,
         name: error.name,
       });
-      toast.error(error.message || 'Failed to send OTP');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Unable to send verification code. Please try again.');
+      toast.error(friendlyError);
       setOtpState((prev) => ({ ...prev, isLoading: false }));
       return false;
     }
@@ -138,11 +140,15 @@ export const useOTP = () => {
         }));
 
         if (result.remainingAttempts !== undefined && result.remainingAttempts > 0) {
-          toast.error(
-            result.error || `Invalid OTP. ${result.remainingAttempts} attempts remaining.`
-          );
+          const errorMsg = result.error 
+            ? getUserFriendlyError(result.error, undefined, 'Invalid verification code.')
+            : `Invalid verification code. ${result.remainingAttempts} attempts remaining.`;
+          toast.error(errorMsg);
         } else {
-          toast.error(result.error || 'Maximum attempts exceeded. Please request a new OTP.');
+          const errorMsg = result.error
+            ? getUserFriendlyError(result.error, undefined, 'Maximum attempts exceeded. Please request a new verification code.')
+            : 'Maximum attempts exceeded. Please request a new verification code.';
+          toast.error(errorMsg);
           // Reset OTP state to require new OTP
           setOtpState((prev) => ({
             ...prev,
@@ -155,7 +161,8 @@ export const useOTP = () => {
       }
     } catch (error: any) {
       console.error('Error verifying OTP:', error);
-      toast.error(error.message || 'Failed to verify OTP');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Verification failed. Please try again.');
+      toast.error(friendlyError);
       return false;
     }
   };
@@ -313,7 +320,8 @@ export const useOTP = () => {
       }
     } catch (error: any) {
       console.error('Error in password login:', error);
-      toast.error(error.message || 'Failed to login with password');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Login failed. Please try again.');
+      toast.error(friendlyError);
       setOtpState((prev) => ({ ...prev, isLoadingPassword: false }));
       return false;
     }
@@ -345,11 +353,15 @@ export const useOTP = () => {
           }));
 
           if (result.remainingAttempts !== undefined && result.remainingAttempts > 0) {
-            toast.error(
-              result.error || `Invalid OTP. ${result.remainingAttempts} attempts remaining.`
-            );
+            const errorMsg = result.error
+              ? getUserFriendlyError(result.error, undefined, 'Invalid verification code.')
+              : `Invalid verification code. ${result.remainingAttempts} attempts remaining.`;
+            toast.error(errorMsg);
           } else {
-            toast.error(result.error || 'Maximum attempts exceeded. Please request a new OTP.');
+            const errorMsg = result.error
+              ? getUserFriendlyError(result.error, undefined, 'Maximum attempts exceeded. Please request a new verification code.')
+              : 'Maximum attempts exceeded. Please request a new verification code.';
+            toast.error(errorMsg);
           }
 
           return false;
@@ -386,7 +398,8 @@ export const useOTP = () => {
       return true;
     } catch (error: any) {
       console.error('Error resetting password:', error);
-      toast.error(error.message || 'Failed to reset password');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Failed to reset password. Please try again.');
+      toast.error(friendlyError);
       setOtpState((prev) => ({ ...prev, isLoadingPassword: false }));
       return false;
     }

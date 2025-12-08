@@ -51,3 +51,5 @@ ios/
 .vercel
 .env*.local
 .env.production
+.env.vercel
+.env.vercel.production

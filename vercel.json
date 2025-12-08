@@ -3,6 +3,7 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "framework": "vite",
+  "devCommand": null,
   "rewrites": [
     {
       "source": "/api/(.*)",

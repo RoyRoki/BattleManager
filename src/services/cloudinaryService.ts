@@ -1,6 +1,8 @@
 // Cloudinary upload service
 // Note: For production, use @cloudinary/react or direct API calls
 
+import { getUserFriendlyError } from '../shared/utils/errorHandler';
+
 const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '';
 const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'battlemanager_preset';
 
@@ -28,7 +30,7 @@ export const uploadImage = async (
   folder: string = 'battlemanager'
 ): Promise<string> => {
   if (!cloudName) {
-    throw new Error('Cloudinary is not configured. Please set VITE_CLOUDINARY_CLOUD_NAME in your environment variables.');
+    throw new Error('Image upload is not available. Please contact support.');
   }
 
   // Helper function to perform upload
@@ -105,23 +107,16 @@ export const uploadImage = async (
     if ('error' in result) {
       const errorMessage = result.errorData?.error?.message || result.error || 'Upload failed';
       console.error('Cloudinary error details:', result.errorData || result);
-      throw new Error(`Cloudinary upload failed: ${errorMessage} (Status: ${result.status || 'unknown'})`);
+      const technicalError = `Cloudinary upload failed: ${errorMessage} (Status: ${result.status || 'unknown'})`;
+      const friendlyError = getUserFriendlyError(technicalError, undefined, 'Failed to upload image. Please try again.');
+      throw new Error(friendlyError);
     }
     
     return result.url;
   } catch (error: any) {
     console.error('Cloudinary upload error:', error);
-    
-    // Provide more helpful error messages
-    if (error.message.includes('Cloudinary upload failed')) {
-      throw error;
-    }
-    
-    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-      throw new Error('Network error. Please check your internet connection and try again.');
-    }
-    
-    throw new Error(error.message || 'Failed to upload image. Please try again.');
+    const friendlyError = getUserFriendlyError(error, undefined, 'Failed to upload image. Please try again.');
+    throw new Error(friendlyError);
   }
 };
 

@@ -5,6 +5,7 @@ import { useAuth } from '../../../../contexts/AuthContext';
 import { emailSchema, userNameSchema, ffIdSchema, passwordSchema, otpSchema } from '../../../../utils/validations';
 import { verifyOTP } from '../../../../services/otpService';
 import toast from 'react-hot-toast';
+import { getUserFriendlyError } from '../../../../shared/utils/errorHandler';
 
 type LoginStep = 'email' | 'login' | 'signup' | 'otp' | 'forgot_password' | 'reset_password';
 type FlowType = 'login' | 'signup' | 'forgot_password';
@@ -141,7 +142,8 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
         }
       }
     } catch (error: any) {
-      toast.error(error.message || 'Invalid email address');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Invalid email address. Please check and try again.');
+      toast.error(friendlyError);
     } finally {
       setIsCheckingUser(false);
     }
@@ -166,7 +168,8 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
         resetOTP();
       }
     } catch (error: any) {
-      toast.error(error.message || 'Failed to login');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Failed to login. Please try again.');
+      toast.error(friendlyError);
     }
   }, [email, password, loginWithPassword, login, navigate, resetOTP]);
 
@@ -184,7 +187,8 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
 
       setStep('otp');
     } catch (error: any) {
-      toast.error(error.message || 'Please check your input');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Please check your input and try again.');
+      toast.error(friendlyError);
     }
   }, [name, ffId, password, confirmPassword]);
 
@@ -211,7 +215,8 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
           }
         }
       } catch (error: any) {
-        toast.error(error.message || 'Failed to verify OTP');
+        const friendlyError = getUserFriendlyError(error, undefined, 'Failed to verify OTP. Please try again.');
+        toast.error(friendlyError);
       }
       return;
     }
@@ -239,7 +244,8 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
         resetOTP();
       }
     } catch (error: any) {
-      toast.error(error.message || 'Failed to verify OTP');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Failed to verify OTP. Please try again.');
+      toast.error(friendlyError);
     }
   }, [isNewUser, name, ffId, email, password, enteredOTP, flowType, verifyOTPCode, login, navigate, resetOTP]);
 
@@ -262,7 +268,8 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
         toast.error('Failed to send OTP. Please try again.');
       }
     } catch (error: any) {
-      toast.error(error.message || 'Failed to send OTP');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Failed to send OTP. Please try again.');
+      toast.error(friendlyError);
     }
   }, [email, sendOTPCode]);
 
@@ -301,7 +308,8 @@ export const useLoginViewModel = (): UseLoginViewModelReturn => {
         resetOTP();
       }
     } catch (error: any) {
-      toast.error(error.message || 'Failed to reset password');
+      const friendlyError = getUserFriendlyError(error, undefined, 'Failed to reset password. Please try again.');
+      toast.error(friendlyError);
     }
   }, [email, enteredOTP, newPassword, confirmNewPassword, isOTPVerifiedForReset, resetPassword, resetOTP]);
 

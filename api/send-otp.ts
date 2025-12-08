@@ -292,43 +292,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     for (let i = 0; i < keyCandidates.length; i++) {
       const key = keyCandidates[i];
       if (key && key.trim() !== '') {
-        console.log(`send-otp: Using BREVO key from source ${i === 0 ? 'VERCEL_BREVO_KEY' : i === 1 ? 'VERCEL_BREVO_KEY_FALLBACK_1' : i === 2 ? 'VERCEL_BREVO_KEY_FALLBACK_2' : i === 3 ? 'BREVO_KEY' : i === 4 ? 'BREVO_API_KEY' : 'VERCEL_BREVO_KEY_FALLBACK_3'}`);
+        const sourceName = i === 0 ? 'VERCEL_BREVO_KEY' : 
+                          i === 1 ? 'VERCEL_BREVO_KEY_FALLBACK_1' : 
+                          i === 2 ? 'VERCEL_BREVO_KEY_FALLBACK_2' : 
+                          i === 3 ? 'BREVO_KEY' : 
+                          i === 4 ? 'BREVO_API_KEY' : 
+                          'VERCEL_BREVO_KEY_FALLBACK_3';
+        console.log(`send-otp: Using BREVO key from source ${sourceName}`);
         return key.trim();
       }
     }
     return null;
   };
 
-  // Helper function to get BREVO SMTP key with fallback support
-  const getBrevoSmtpKey = (): string | null => {
-    // Try keys in priority order
-    const keyCandidates = [
-      process.env.VERCEL_BREVO_SMTP_KEY,
-      process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_1,
-      process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_2,
-      process.env.BREVO_SMTP_KEY,
-      process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_3,
-    ];
-
-    for (let i = 0; i < keyCandidates.length; i++) {
-      const key = keyCandidates[i];
-      if (key && key.trim() !== '') {
-        console.log(`send-otp: Using BREVO SMTP key from source ${i === 0 ? 'VERCEL_BREVO_SMTP_KEY' : i === 1 ? 'VERCEL_BREVO_SMTP_KEY_FALLBACK_1' : i === 2 ? 'VERCEL_BREVO_SMTP_KEY_FALLBACK_2' : i === 3 ? 'BREVO_SMTP_KEY' : 'VERCEL_BREVO_SMTP_KEY_FALLBACK_3'}`);
-        return key.trim();
-      }
-    }
-    return null;
-  };
+  // Note: BREVO API v3 uses the same API key (xkeysib) for both API and SMTP
+  // No separate SMTP key needed - we use the same BREVO_KEY
 
     const BREVO_KEY = getBrevoKey();
-    const BREVO_SMTP_KEY = getBrevoSmtpKey();
     const OTP_EXPIRY_MINUTES = 5;
 
     // Debug logging
     console.log('send-otp: Environment check:', {
     NODE_ENV: process.env.NODE_ENV,
     hasBrevoKey: !!BREVO_KEY,
-    hasBrevoSmtpKey: !!BREVO_SMTP_KEY,
     apiKeyPrefix: BREVO_KEY ? BREVO_KEY.substring(0, 10) + '...' : 'NOT SET',
     hasFallback1: !!process.env.VERCEL_BREVO_KEY_FALLBACK_1,
     hasFallback2: !!process.env.VERCEL_BREVO_KEY_FALLBACK_2,
@@ -347,21 +333,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       return res.status(500).json({ 
         success: false,
-        error: 'BREVO API key not configured. Please set VERCEL_BREVO_KEY or one of the fallback environment variables.' 
-      });
-    }
-
-    if (!BREVO_SMTP_KEY) {
-      console.error('send-otp: Missing BREVO SMTP key in all fallback sources');
-      console.error('send-otp: Checked keys:', {
-        VERCEL_BREVO_SMTP_KEY: !!process.env.VERCEL_BREVO_SMTP_KEY,
-        VERCEL_BREVO_SMTP_KEY_FALLBACK_1: !!process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_1,
-        VERCEL_BREVO_SMTP_KEY_FALLBACK_2: !!process.env.VERCEL_BREVO_SMTP_KEY_FALLBACK_2,
-        BREVO_SMTP_KEY: !!process.env.BREVO_SMTP_KEY,
-      });
-      return res.status(500).json({ 
-        success: false,
-        error: 'BREVO SMTP key not configured. Please set VERCEL_BREVO_SMTP_KEY or one of the fallback environment variables.' 
+        error: 'Email service is temporarily unavailable. Please contact support.' 
       });
     }
 
@@ -717,7 +689,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       return res.status(500).json({
         success: false,
-        error: `Failed to send OTP via email: ${fetchError.message}`,
+        error: 'Unable to send verification code. Please try again in a moment.',
       });
     }
     } catch (innerError: any) {
@@ -749,13 +721,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     return res.status(500).json({
       success: false,
-      error: 'Internal server error',
-      message: error.message || 'An unexpected error occurred',
+      error: 'An unexpected error occurred. Please try again later.',
       errorCode: 'UNEXPECTED_ERROR',
-      details: process.env.NODE_ENV === 'development' ? {
-        message: error.message,
-        stack: error.stack?.substring(0, 500),
-      } : undefined,
     });
   }
 }
