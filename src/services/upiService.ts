@@ -1,4 +1,44 @@
 /**
+ * Generate or modify merchant payment URL with amount
+ * @param merchantUrl - Merchant payment URL (e.g., upi://pay?pa=gpay-xxx@okbizaxis&mc=5399&pn=Merchant)
+ * @param amount - Amount to pay
+ * @returns UPI payment string with amount injected/replaced
+ */
+export const generateMerchantPaymentUrl = (
+  merchantUrl: string,
+  amount: number
+): string => {
+  try {
+    // UPI URLs use custom protocol (upi://pay?...), so we need to parse manually
+    const match = merchantUrl.match(/^(upi:\/\/pay\?)(.*)$/);
+    
+    if (!match) {
+      throw new Error('Invalid merchant payment URL format. Must start with "upi://pay?"');
+    }
+
+    const urlPrefix = match[1]; // "upi://pay?"
+    const queryString = match[2]; // The query parameters
+
+    // Parse query parameters
+    const params = new URLSearchParams(queryString);
+
+    // Set or update the amount parameter
+    params.set('am', amount.toString());
+
+    // Ensure currency is set to INR if not present
+    if (!params.has('cu')) {
+      params.set('cu', 'INR');
+    }
+
+    // Reconstruct the URL
+    return `${urlPrefix}${params.toString()}`;
+  } catch (error: any) {
+    console.error('Error parsing merchant URL:', error);
+    throw new Error(`Invalid merchant payment URL: ${error.message}`);
+  }
+};
+
+/**
  * Generate UPI payment string for adding money
  * @param upiId - UPI ID (e.g., 9800881300@upi)
  * @param upiName - Merchant/UPI name (e.g., RokiRoy)

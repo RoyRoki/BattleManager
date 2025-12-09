@@ -24,7 +24,7 @@ if (fs.existsSync(envPath)) {
   console.log('Loaded environment variables from .env.local');
 }
 
-const PORT = 3001;
+const PORT = 3000;
 
 // Dynamic import for TypeScript API functions
 async function loadHandler(apiPath) {
@@ -113,12 +113,14 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`API server running on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`API server running on http://0.0.0.0:${PORT}`);
+  console.log(`Accessible from network at http://<your-ip>:${PORT}`);
   console.log('Available endpoints:');
   console.log('  POST /api/send-otp');
   console.log('  POST /api/verify-otp');
 });
+
 
 
 

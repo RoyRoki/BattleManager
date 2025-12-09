@@ -4,7 +4,7 @@ import { collection, query, where, addDoc } from 'firebase/firestore';
 import { firestore } from '../services/firebaseService';
 import { useAuth } from '../contexts/AuthContext';
 import { usePoints } from '../contexts/PointsContext';
-import { generateAddMoneyUPIString } from '../services/upiService';
+import { generateAddMoneyUPIString, generateMerchantPaymentUrl } from '../services/upiService';
 import { withdrawalSchema } from '../utils/validations';
 import { MIN_WITHDRAW, PRESET_WITHDRAWAL_AMOUNTS } from '../utils/constants';
 import { useAppSettings } from '../hooks/useAppSettings';
@@ -12,7 +12,6 @@ import { useFirestoreTransaction } from '../hooks/useFirestoreTransaction';
 import { Payment } from '../types';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
-import { getUserFriendlyError } from '../shared/utils/errorHandler';
 
 // Preset amounts for adding money
 const PRESET_AMOUNTS = [100, 200, 500, 1000];
@@ -20,7 +19,7 @@ const PRESET_AMOUNTS = [100, 200, 500, 1000];
 export const MoneyPage: React.FC = () => {
   const { user } = useAuth();
   const { points } = usePoints();
-  const { withdrawalCommission, upiId, upiName, loading: settingsLoading } = useAppSettings();
+  const { withdrawalCommission, upiId, upiName, merchantPaymentUrl, loading: settingsLoading } = useAppSettings();
   const { deductPoints } = useFirestoreTransaction();
   const [activeTab, setActiveTab] = useState<'add' | 'withdraw' | 'history'>('add');
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
@@ -28,43 +27,22 @@ export const MoneyPage: React.FC = () => {
   const [bankAccountNo, setBankAccountNo] = useState('');
   const [ifscCode, setIfscCode] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showIPhoneManualPayment, setShowIPhoneManualPayment] = useState(false);
-  const [transactionId, setTransactionId] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{
     bank_account_no?: string;
     ifsc_code?: string;
     amount?: string;
-    transaction_id?: string;
   }>({});
 
   const [payments, loading] = (useCollection(
-    user && user.email
+    user
       ? query(
           collection(firestore, 'payments'),
-          where('user_email', '==', user.email)
+          where('user_mobile', '==', user.mobile_no)
         )
       : null
   ) as unknown as [{ docs: any[] } | null, boolean]) || [null, true];
 
-  // Helper function to create automatic payment request when UPI fails
-  const createAutomaticPaymentRequest = async () => {
-    if (!user || !selectedAmount) {
-      throw new Error('User or amount not available');
-    }
-
-    await addDoc(collection(firestore, 'payments'), {
-      user_email: user.email,
-      user_name: user.name || 'Unknown',
-      amount: selectedAmount,
-      status: 'pending',
-      type: 'add_money',
-      notes: 'Check Carefully - Android payment',
-      created_at: new Date(),
-      updated_at: new Date(),
-    });
-  };
-
-  const handleUPIPayment = () => {
+  const handleAddMoney = async () => {
     if (!user) {
       toast.error('Please login');
       return;
@@ -75,136 +53,58 @@ export const MoneyPage: React.FC = () => {
       return;
     }
 
-    // Check if UPI settings are configured
-    if (!upiId || !upiName) {
+    // Check if payment settings are configured
+    if (!merchantPaymentUrl && (!upiId || !upiName)) {
       toast.error('Payment is temporarily down. Please contact admin.');
-      return;
-    }
-
-    // Generate UPI payment link
-    const upiLink = generateAddMoneyUPIString(
-      upiId,
-      upiName,
-      selectedAmount,
-      `Add ${selectedAmount} Points - ${user.email}`
-    );
-
-    // Track if user left the page (indicating UPI app opened)
-    let userLeftPage = false;
-    let blurTimeout: ReturnType<typeof setTimeout> | undefined;
-    let failureTimeout: ReturnType<typeof setTimeout> | undefined;
-
-    const handleBlur = () => {
-      userLeftPage = true;
-      // User left the page, UPI app likely opened
-      window.removeEventListener('blur', handleBlur);
-      window.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (blurTimeout) clearTimeout(blurTimeout);
-      if (failureTimeout) clearTimeout(failureTimeout);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        userLeftPage = true;
-        window.removeEventListener('blur', handleBlur);
-        window.removeEventListener('visibilitychange', handleVisibilityChange);
-        if (blurTimeout) clearTimeout(blurTimeout);
-        if (failureTimeout) clearTimeout(failureTimeout);
-      }
-    };
-
-    // Listen for page blur/visibility change (user switching to UPI app)
-    window.addEventListener('blur', handleBlur);
-    window.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Try to open UPI payment link
-    try {
-      window.location.href = upiLink;
-      
-      // Check after 2.5 seconds if user is still on the page
-      // If user didn't leave, UPI app didn't open
-      failureTimeout = setTimeout(async () => {
-        if (!userLeftPage) {
-          console.warn('UPI payment link failed to launch, creating automatic payment request');
-          try {
-            // Create automatic payment request
-            await createAutomaticPaymentRequest();
-            // Show success message
-            toast.success('Payment request created automatically! Admin will verify and approve.', { duration: 5000 });
-            // Reset form
-            setSelectedAmount(null);
-          } catch (error: any) {
-            console.error('Error creating automatic payment request:', error);
-            toast.error('Unable to open UPI app. Please use manual payment.', { duration: 4000 });
-            setShowIPhoneManualPayment(true);
-          }
-        }
-        // Clean up listeners
-        window.removeEventListener('blur', handleBlur);
-        window.removeEventListener('visibilitychange', handleVisibilityChange);
-      }, 2500);
-    } catch (error: any) {
-      console.error('Failed to open UPI link:', error);
-      // Create automatic payment request
-      createAutomaticPaymentRequest().then(() => {
-        // Show success message
-        toast.success('Payment request created automatically! Admin will verify and approve.', { duration: 5000 });
-        // Reset form
-        setSelectedAmount(null);
-      }).catch((err) => {
-        console.error('Error creating payment request:', err);
-        toast.error('Unable to open UPI app. Please use manual payment.', { duration: 4000 });
-        setShowIPhoneManualPayment(true);
-      });
-      // Clean up listeners
-      window.removeEventListener('blur', handleBlur);
-      window.removeEventListener('visibilitychange', handleVisibilityChange);
-    }
-  };
-
-  const handleIPhoneManualPayment = async () => {
-    if (!user) {
-      toast.error('Please login');
-      return;
-    }
-
-    if (!selectedAmount) {
-      toast.error('Please select an amount');
-      return;
-    }
-
-    if (!transactionId.trim()) {
-      setFieldErrors({ ...fieldErrors, transaction_id: 'Transaction ID is required' });
-      toast.error('Please enter transaction ID');
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      // Create payment request with transaction ID for admin approval
+      // Create payment request for admin approval
       await addDoc(collection(firestore, 'payments'), {
-        user_email: user.email,
+        user_mobile: user.mobile_no,
         user_name: user.name || 'Unknown',
         amount: selectedAmount,
         status: 'pending',
-        type: 'add_money',
-        transaction_id: transactionId.trim(),
         created_at: new Date(),
         updated_at: new Date(),
       });
 
-      toast.success('Payment request submitted! Admin will verify and approve.', { duration: 5000 });
+      // Generate UPI payment link
+      // Priority: Use merchant URL if available, otherwise use normal UPI
+      let upiString: string;
+      if (merchantPaymentUrl) {
+        try {
+          upiString = generateMerchantPaymentUrl(merchantPaymentUrl, selectedAmount);
+        } catch (error: any) {
+          console.error('Error generating merchant payment URL:', error);
+          toast.error('Invalid merchant payment URL. Please contact admin.');
+          setIsProcessing(false);
+          return;
+        }
+      } else {
+        upiString = generateAddMoneyUPIString(
+          upiId!,
+          upiName!,
+          selectedAmount,
+          `Add ${selectedAmount} Points - ${user.mobile_no}`
+        );
+      }
 
-      // Reset form
+      // Open UPI payment app
+      window.location.href = upiString;
+
+      toast.success(
+        'Payment request sent! Complete the payment in your UPI app. Admin will verify and approve.',
+        { duration: 5000 }
+      );
+
       setSelectedAmount(null);
-      setTransactionId('');
-      setShowIPhoneManualPayment(false);
-      setFieldErrors({});
     } catch (error: any) {
       console.error('Payment error:', error);
-      const friendlyError = getUserFriendlyError(error, 'payment', 'Failed to submit payment request. Please try again.');
-      toast.error(friendlyError);
+      toast.error(error.message || 'Failed to process payment');
     } finally {
       setIsProcessing(false);
     }
@@ -263,7 +163,7 @@ export const MoneyPage: React.FC = () => {
       const finalAmount = selectedWithdrawAmount - commissionAmount;
 
       // Deduct points immediately
-      const deducted = await deductPoints(user.email, selectedWithdrawAmount);
+      const deducted = await deductPoints(user.mobile_no, selectedWithdrawAmount);
       if (!deducted) {
         setIsProcessing(false);
         return;
@@ -271,7 +171,7 @@ export const MoneyPage: React.FC = () => {
 
       // Create withdrawal request
       await addDoc(collection(firestore, 'payments'), {
-        user_email: user.email,
+        user_mobile: user.mobile_no,
         user_name: user.name || 'Unknown',
         amount: selectedWithdrawAmount,
         bank_account_no: withdrawalData.bank_account_no,
@@ -317,8 +217,7 @@ export const MoneyPage: React.FC = () => {
           toast.error(firstError);
         }
       } else {
-        const friendlyError = getUserFriendlyError(error, 'payment', 'Failed to submit withdrawal request. Please try again.');
-        toast.error(friendlyError);
+        toast.error(error.message || 'Failed to submit withdrawal');
       }
     } finally {
       setIsProcessing(false);
@@ -362,7 +261,7 @@ export const MoneyPage: React.FC = () => {
             <h3 className="text-xl font-heading text-primary mb-4">Add Money</h3>
             {settingsLoading ? (
               <p className="text-sm text-gray-400 mb-6">Loading payment settings...</p>
-            ) : !upiId || !upiName ? (
+            ) : !merchantPaymentUrl && (!upiId || !upiName) ? (
               <div className="bg-red-900/30 border border-red-700 rounded-lg p-4 mb-6">
                 <p className="text-red-300 font-heading">Payment is temporarily down</p>
                 <p className="text-sm text-red-400 mt-1">Please contact admin to configure payment settings.</p>
@@ -374,24 +273,24 @@ export const MoneyPage: React.FC = () => {
             )}
 
             {/* Preset Amount Buttons */}
-            {(!settingsLoading && upiId && upiName) && (
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                {PRESET_AMOUNTS.map((amount) => (
-                  <motion.button
-                    key={amount}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setSelectedAmount(amount)}
-                    className={`py-4 px-6 rounded-lg font-heading text-lg transition-all border-2 ${
-                      selectedAmount === amount
-                        ? 'bg-primary text-bg border-primary shadow-lg shadow-primary/30'
-                        : 'bg-bg border-gray-700 text-white hover:border-primary/50'
-                    }`}
-                  >
-                    ₹{amount}
-                  </motion.button>
-                ))}
-              </div>
+            {(!settingsLoading && (merchantPaymentUrl || (upiId && upiName))) && (
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {PRESET_AMOUNTS.map((amount) => (
+                <motion.button
+                  key={amount}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setSelectedAmount(amount)}
+                  className={`py-4 px-6 rounded-lg font-heading text-lg transition-all border-2 ${
+                    selectedAmount === amount
+                      ? 'bg-primary text-bg border-primary shadow-lg shadow-primary/30'
+                      : 'bg-bg border-gray-700 text-white hover:border-primary/50'
+                  }`}
+                >
+                  ₹{amount}
+                </motion.button>
+              ))}
+            </div>
             )}
 
             {/* Selected Amount Display */}
@@ -406,157 +305,28 @@ export const MoneyPage: React.FC = () => {
               </motion.div>
             )}
 
-            {/* Payment Buttons - Only show when amount is selected and settings are configured */}
-            {selectedAmount && !showIPhoneManualPayment && upiId && upiName && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-3 mb-6"
-              >
-                <div className="flex flex-col gap-3">
-                  {/* UPI Payment Button */}
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleUPIPayment}
-                    disabled={isProcessing}
-                    className="w-full bg-primary text-bg py-4 rounded-lg font-heading text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-opacity-90"
-                  >
-                    {isProcessing ? 'Processing...' : 'Payment'}
-                  </motion.button>
-
-                  {/* Manual Payment Button - Always visible */}
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowIPhoneManualPayment(true)}
-                    disabled={isProcessing}
-                    className="w-full bg-cyan-600 hover:bg-cyan-700 text-white py-4 rounded-lg font-heading text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    For iPhone Users
-                  </motion.button>
-                </div>
-              </motion.div>
-            )}
-
-            {/* Manual Payment UI */}
-            {selectedAmount && showIPhoneManualPayment && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-bg border border-primary/30 rounded-lg p-6 mb-6 space-y-4"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h4 className="text-lg font-heading text-primary">Manual Payment Details</h4>
-                    <p className="text-xs text-gray-400 mt-1">For iPhone</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowIPhoneManualPayment(false);
-                      setTransactionId('');
-                      setFieldErrors({ ...fieldErrors, transaction_id: undefined });
-                    }}
-                    className="text-gray-400 hover:text-white"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                {/* UPI Details Display */}
-                <div className="space-y-3">
-                  {!upiId || !upiName ? (
-                    <div className="bg-red-900/30 border border-red-700 rounded-lg p-4">
-                      <p className="text-red-300 font-heading">Payment is temporarily down</p>
-                      <p className="text-sm text-red-400 mt-1">Please contact admin to configure payment settings.</p>
-                    </div>
-                  ) : (
-                    <div className="bg-bg-secondary rounded-lg p-4 space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">UPI ID:</span>
-                        <button
-                          onClick={async () => {
-                            try {
-                              await navigator.clipboard.writeText(upiId);
-                              toast.success('UPI ID copied to clipboard!', {
-                                icon: '📋',
-                                duration: 2000,
-                              });
-                            } catch (error) {
-                              console.error('Failed to copy:', error);
-                              toast.error('Failed to copy UPI ID');
-                            }
-                          }}
-                          className="text-white font-heading hover:text-primary transition-colors bg-transparent border-none cursor-pointer"
-                          title="Click to copy UPI ID"
-                          aria-label="Copy UPI ID"
-                        >
-                          {upiId}
-                        </button>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Merchant Name:</span>
-                        <span className="text-white font-heading">{upiName}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Amount:</span>
-                        <span className="text-primary font-heading text-lg">₹{selectedAmount}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  <p className="text-sm text-gray-400 text-center">
-                    Please complete the payment manually using the details above, then enter your transaction ID below.
-                  </p>
-
-                  {upiId && upiName && (
-                    <>
-                      {/* Transaction ID Input */}
-                      <div>
-                        <label className="block text-sm mb-2 text-gray-400">Transaction ID</label>
-                        <input
-                          type="text"
-                          value={transactionId}
-                          onChange={(e) => {
-                            setTransactionId(e.target.value);
-                            if (fieldErrors.transaction_id) {
-                              setFieldErrors({ ...fieldErrors, transaction_id: undefined });
-                            }
-                          }}
-                          placeholder="Enter transaction ID from your payment app"
-                          className={`w-full bg-bg border rounded-lg px-4 py-3 focus:outline-none ${
-                            fieldErrors.transaction_id
-                              ? 'border-red-500 focus:border-red-500'
-                              : 'border-gray-700 focus:border-primary'
-                          }`}
-                        />
-                        {fieldErrors.transaction_id && (
-                          <p className="text-red-400 text-xs mt-1">{fieldErrors.transaction_id}</p>
-                        )}
-                      </div>
-
-                      {/* Continue Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={handleIPhoneManualPayment}
-                        disabled={isProcessing || !transactionId.trim()}
-                        className="w-full bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-80 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {isProcessing ? (
-                          <>
-                            <div className="w-5 h-5 border-2 border-bg border-t-transparent rounded-full animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          'Continue'
-                        )}
-                      </motion.button>
-                    </>
-                  )}
-                </div>
-              </motion.div>
-            )}
+            {/* Pay Button */}
+            <motion.button
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+              onClick={handleAddMoney}
+              disabled={!selectedAmount || isProcessing}
+              className="w-full bg-primary text-bg py-4 rounded-lg font-heading text-lg hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isProcessing ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-bg border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  Pay with UPI
+                </>
+              )}
+            </motion.button>
 
             <p className="text-xs text-gray-500 mt-4 text-center">
               After payment, admin will verify and approve your points within 24 hours.
