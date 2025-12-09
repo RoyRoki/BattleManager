@@ -26,7 +26,7 @@ export const SupportChatInterface: React.FC<SupportChatInterfaceProps> = ({
   showHeader = true,
 }) => {
   const { messages, isLoading, isUploading, sendMessage, sendImageMessage } = useSupportChat({
-    targetUserEmail,
+    targetUserEmail: targetUserEmail,
   });
   const { user, isAdmin } = useAuth();
   const [message, setMessage] = useState('');
