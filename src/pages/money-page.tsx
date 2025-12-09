@@ -19,7 +19,7 @@ const PRESET_AMOUNTS = [100, 200, 500, 1000];
 export const MoneyPage: React.FC = () => {
   const { user } = useAuth();
   const { points } = usePoints();
-  const { withdrawalCommission, qrCodeUrl, loading: settingsLoading } = useAppSettings();
+  const { withdrawalCommission, qrCodeUrl, upiId, loading: settingsLoading } = useAppSettings();
   const { deductPoints } = useFirestoreTransaction();
   const [activeTab, setActiveTab] = useState<'add' | 'withdraw' | 'history'>('add');
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
@@ -335,7 +335,7 @@ export const MoneyPage: React.FC = () => {
                 <div className="space-y-4">
                   {/* QR Code Display */}
                   {qrCodeUrl && (
-                    <div className="bg-bg-secondary rounded-lg p-4 flex flex-col items-center">
+                    <div className="bg-bg-secondary rounded-lg p-4 flex flex-col items-center space-y-3">
                       <p className="text-sm text-gray-400 mb-3">Scan this QR code to pay</p>
                       <motion.img
                         initial={{ opacity: 0, scale: 0.9 }}
@@ -344,6 +344,36 @@ export const MoneyPage: React.FC = () => {
                         alt="Payment QR Code"
                         className="max-w-full max-h-64 rounded-lg border-2 border-primary/30"
                       />
+                      {/* UPI ID Display */}
+                      {upiId && (
+                        <div className="w-full mt-3 pt-3 border-t border-gray-700">
+                          <p className="text-xs text-gray-400 mb-2 text-center">Or pay using UPI ID:</p>
+                          <div className="flex items-center justify-center gap-2 bg-bg rounded-lg px-3 py-2 border border-gray-700">
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await navigator.clipboard.writeText(upiId);
+                                  toast.success('UPI ID copied to clipboard!', {
+                                    icon: '📋',
+                                    duration: 2000,
+                                  });
+                                } catch (error) {
+                                  console.error('Failed to copy:', error);
+                                  toast.error('Failed to copy UPI ID');
+                                }
+                              }}
+                              className="text-gray-400 hover:text-white transition-colors"
+                              title="Click to copy UPI ID"
+                              aria-label="Copy UPI ID"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                              </svg>
+                            </button>
+                            <span className="text-white font-heading text-sm">{upiId}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                   
