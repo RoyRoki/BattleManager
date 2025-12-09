@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDocument, useCollection } from 'react-firebase-hooks/firestore';
-import { doc, collection } from 'firebase/firestore';
+import { doc, collection, QuerySnapshot } from 'firebase/firestore';
 import { firestore } from '../services/firebaseService';
 import { Tournament, TournamentStatus } from '../types';
 import { EnrollButton } from '../components/enroll-button';
@@ -43,6 +43,40 @@ export const TournamentDetailPage: React.FC = () => {
     id ? doc(firestore, 'tournaments', id) : null
   );
 
+  // Extract tournament data (will be null if not loaded yet)
+  const tournament = useMemo(() => {
+    if (!tournamentDoc?.exists()) return null;
+    const data = tournamentDoc.data();
+    return {
+      id: tournamentDoc.id,
+      ...data,
+      start_time:
+        data.start_time instanceof Date
+          ? data.start_time
+          : (data.start_time as any)?.toDate?.() || new Date(),
+      reveal_time:
+        data.reveal_time instanceof Date
+          ? data.reveal_time
+          : (data.reveal_time as any)?.toDate?.() || undefined,
+      created_at:
+        data.created_at instanceof Date
+          ? data.created_at
+          : (data.created_at as any)?.toDate?.() || new Date(),
+      updated_at:
+        data.updated_at instanceof Date
+          ? data.updated_at
+          : (data.updated_at as any)?.toDate?.() || new Date(),
+    } as Tournament;
+  }, [tournamentDoc]);
+
+  // Call useCountdown hook BEFORE any early returns (Rules of Hooks)
+  // It will handle null/undefined tournament gracefully
+  const countdown = useCountdown(tournament?.start_time);
+
+  // Call useCollection hook BEFORE any early returns (Rules of Hooks)
+  // This ensures hooks are always called in the same order
+  const [usersSnapshot] = useCollection(collection(firestore, 'users'));
+
   if (loading) {
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center">
@@ -51,7 +85,7 @@ export const TournamentDetailPage: React.FC = () => {
     );
   }
 
-  if (error || !tournamentDoc?.exists()) {
+  if (error || !tournament) {
     return (
       <div className="min-h-screen bg-bg flex flex-col items-center justify-center gap-4">
         <div className="text-accent text-xl font-heading">Tournament not found</div>
@@ -66,30 +100,7 @@ export const TournamentDetailPage: React.FC = () => {
     );
   }
 
-  const data = tournamentDoc.data();
-  const tournament = {
-    id: tournamentDoc.id,
-    ...data,
-    start_time:
-      data.start_time instanceof Date
-        ? data.start_time
-        : (data.start_time as any)?.toDate?.() || new Date(),
-    reveal_time:
-      data.reveal_time instanceof Date
-        ? data.reveal_time
-        : (data.reveal_time as any)?.toDate?.() || undefined,
-    created_at:
-      data.created_at instanceof Date
-        ? data.created_at
-        : (data.created_at as any)?.toDate?.() || new Date(),
-    updated_at:
-      data.updated_at instanceof Date
-        ? data.updated_at
-        : (data.updated_at as any)?.toDate?.() || new Date(),
-  } as Tournament;
-
   const effectiveStatus = getEffectiveStatus(tournament);
-  const countdown = useCountdown(tournament.start_time);
   
   // Check if enrollment is allowed (status must be upcoming and start_time hasn't passed)
   const enrollmentAllowed = tournament.status === 'upcoming' && 
@@ -242,7 +253,12 @@ export const TournamentDetailPage: React.FC = () => {
            tournament.player_kills && 
            Object.keys(tournament.player_kills).length > 0 && (
             <div className="px-4 pb-4">
-              <KillLeaderboard tournament={tournament} currentUserEmail={user?.email} isLive={effectiveStatus === 'live'} />
+              <KillLeaderboard 
+                tournament={tournament} 
+                currentUserEmail={user?.email} 
+                isLive={effectiveStatus === 'live'}
+                usersSnapshot={usersSnapshot}
+              />
             </div>
           )}
 
@@ -372,10 +388,10 @@ interface KillLeaderboardProps {
   tournament: Tournament;
   currentUserEmail?: string;
   isLive?: boolean;
+  usersSnapshot: QuerySnapshot | undefined;
 }
 
-const KillLeaderboard: React.FC<KillLeaderboardProps> = ({ tournament, currentUserEmail, isLive = false }) => {
-  const [usersSnapshot] = useCollection(collection(firestore, 'users'));
+const KillLeaderboard: React.FC<KillLeaderboardProps> = ({ tournament, currentUserEmail, isLive = false, usersSnapshot }) => {
 
   const leaderboard = useMemo(() => {
     if (!tournament.player_kills || !usersSnapshot?.docs) return [];
