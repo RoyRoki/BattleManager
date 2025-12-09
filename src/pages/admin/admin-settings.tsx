@@ -7,6 +7,7 @@ import { useAppSettings } from '../../hooks/useAppSettings';
 import { useAuth } from '../../contexts/AuthContext';
 import { ROUTES } from '../../utils/constants';
 import toast from 'react-hot-toast';
+import { QRCodeUpload } from '../../components/qr-code-upload';
 
 interface SettingsSectionProps {
   title: string;
@@ -138,42 +139,41 @@ const CommissionSettings: React.FC = () => {
 };
 
 const UPISettings: React.FC = () => {
-  const { upiId, upiName, merchantPaymentUrl, loading, updateUPISettings } = useAppSettings();
+  const { upiId, upiName, qrCodeUrl, loading, updateUPISettings, updateQRCodeUrl } = useAppSettings();
   const [upiIdValue, setUpiIdValue] = useState<string>('');
   const [upiNameValue, setUpiNameValue] = useState<string>('');
-  const [merchantUrlValue, setMerchantUrlValue] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
   React.useEffect(() => {
     setUpiIdValue(upiId || '');
     setUpiNameValue(upiName || '');
-    setMerchantUrlValue(merchantPaymentUrl || '');
-  }, [upiId, upiName, merchantPaymentUrl]);
+  }, [upiId, upiName]);
 
   const handleSave = async () => {
-    // If merchant URL is provided, it can be used alone
-    // Otherwise, both UPI ID and Name are required
-    if (!merchantUrlValue.trim() && !upiIdValue.trim()) {
-      toast.error('Either Merchant Payment URL or UPI ID is required');
+    if (!upiIdValue.trim()) {
+      toast.error('UPI ID is required');
       return;
     }
-    if (!merchantUrlValue.trim() && !upiNameValue.trim()) {
-      toast.error('UPI Name is required when UPI ID is provided');
+    if (!upiNameValue.trim()) {
+      toast.error('UPI Name is required');
       return;
     }
 
     setIsSaving(true);
     const success = await updateUPISettings(
-      upiIdValue.trim() || '',
-      upiNameValue.trim() || '',
-      merchantUrlValue.trim() || undefined
+      upiIdValue.trim(),
+      upiNameValue.trim()
     );
     setIsSaving(false);
     if (success) {
       setUpiIdValue(upiIdValue.trim());
       setUpiNameValue(upiNameValue.trim());
-      setMerchantUrlValue(merchantUrlValue.trim());
     }
+  };
+
+  const handleQRCodeUpload = async (url: string) => {
+    await updateQRCodeUrl(url);
+    // Error is already shown by updateQRCodeUrl if it fails
   };
 
   if (loading) {
@@ -181,90 +181,74 @@ const UPISettings: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-3 mb-4">
-        <p className="text-xs text-blue-300">
-          💡 <strong>Option 1:</strong> Use Merchant Payment URL (recommended for merchant accounts)
-          <br />
-          💡 <strong>Option 2:</strong> Use UPI ID + Name (for personal/simple UPI)
-        </p>
+    <div className="space-y-6">
+      {/* QR Code Upload Section */}
+      <div>
+        <h3 className="text-lg font-heading text-primary mb-4">QR Code for Payments</h3>
+        <QRCodeUpload
+          currentQRCodeUrl={qrCodeUrl}
+          onUploadSuccess={handleQRCodeUpload}
+          onUploadError={(error) => {
+            console.error('QR Code upload error:', error);
+          }}
+        />
+        {!qrCodeUrl && (
+          <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 mt-4">
+            <p className="text-xs text-yellow-300">
+              ⚠️ QR Code is not configured. Users will not be able to see the payment QR code until it is uploaded.
+            </p>
+          </div>
+        )}
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          Merchant Payment URL <span className="text-gray-500">(Optional)</span>
-        </label>
-        <input
-          type="text"
-          value={merchantUrlValue}
-          onChange={(e) => setMerchantUrlValue(e.target.value)}
-          placeholder="e.g., upi://pay?pa=gpay-xxx@okbizaxis&mc=5399&pn=Merchant"
-          className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary font-mono text-sm"
-        />
-        <p className="text-xs text-gray-500 mt-2">
-          Enter the complete merchant payment URL. If set, this will be used instead of UPI ID. Amount will be automatically added.
+      <div className="border-t border-gray-700 pt-6">
+        <h3 className="text-lg font-heading text-primary mb-4">UPI Details (Optional)</h3>
+        <p className="text-xs text-gray-400 mb-4">
+          UPI ID and Name are optional and can be displayed in the payment interface for reference.
         </p>
-        <div className="text-xs text-gray-600 mt-3 p-3 bg-gray-900/50 rounded border border-gray-800">
-          <p className="font-medium text-gray-400 mb-2">Example Merchant Payment URL:</p>
-          <code className="text-gray-300 break-all text-xs">
-            upi://pay?pa=gpay-11213975661@okbizaxis&mc=5399&pn=Google%20Pay%20Merchant&oobe=fos123&qrst=stn&tr=1213975661&cu=INR
-          </code>
-          <p className="text-gray-500 mt-2">
-            📝 Paste the entire URL exactly as provided by your payment gateway. The amount parameter (am) will be automatically added.
-          </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              UPI ID <span className="text-gray-500">(Optional)</span>
+            </label>
+            <input
+              type="text"
+              value={upiIdValue}
+              onChange={(e) => setUpiIdValue(e.target.value)}
+              placeholder="e.g., 9800881300@upi"
+              className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary"
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              Enter your UPI ID (e.g., phone@upi, name@paytm)
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              UPI Name / Merchant Name <span className="text-gray-500">(Optional)</span>
+            </label>
+            <input
+              type="text"
+              value={upiNameValue}
+              onChange={(e) => setUpiNameValue(e.target.value)}
+              placeholder="e.g., RokiRoy"
+              className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary"
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              Enter the merchant name that appears in UPI payments
+            </p>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleSave}
+            disabled={isSaving || (upiIdValue === upiId && upiNameValue === upiName)}
+            className="w-full bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-80 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? 'Saving...' : 'Save UPI Settings'}
+          </motion.button>
         </div>
       </div>
-
-      <div className="border-t border-gray-700 pt-4 mt-4">
-        <p className="text-xs text-gray-400 mb-3">Alternative: UPI ID Method</p>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          UPI ID <span className="text-gray-500">(Optional if Merchant URL is set)</span>
-        </label>
-        <input
-          type="text"
-          value={upiIdValue}
-          onChange={(e) => setUpiIdValue(e.target.value)}
-          placeholder="e.g., 9800881300@upi"
-          className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary"
-        />
-        <p className="text-xs text-gray-500 mt-2">
-          Enter your UPI ID (e.g., phone@upi, name@paytm)
-        </p>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          UPI Name / Merchant Name <span className="text-gray-500">(Required if UPI ID is set)</span>
-        </label>
-        <input
-          type="text"
-          value={upiNameValue}
-          onChange={(e) => setUpiNameValue(e.target.value)}
-          placeholder="e.g., RokiRoy"
-          className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary"
-        />
-        <p className="text-xs text-gray-500 mt-2">
-          Enter the merchant name that appears in UPI payments
-        </p>
-      </div>
-      <motion.button
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={handleSave}
-        disabled={isSaving || (upiIdValue === upiId && upiNameValue === upiName && merchantUrlValue === (merchantPaymentUrl || ''))}
-        className="w-full bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-80 transition disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isSaving ? 'Saving...' : 'Save UPI Settings'}
-      </motion.button>
-      {(!upiId || !upiName) && !merchantPaymentUrl && (
-        <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3">
-          <p className="text-xs text-yellow-300">
-            ⚠️ UPI settings are not configured. Payment feature will be disabled until Merchant Payment URL or (UPI ID and Name) are set.
-          </p>
-        </div>
-      )}
     </div>
   );
 };

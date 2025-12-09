@@ -8,7 +8,7 @@ export interface AppSettings {
   withdrawalCommission: number;
   upiId?: string;
   upiName?: string;
-  merchantPaymentUrl?: string;
+  qrCodeUrl?: string;
   apkDownloadUrl?: string;
   updated_at?: Date;
 }
@@ -32,7 +32,7 @@ export const useAppSettings = () => {
     withdrawalCommission: DEFAULT_WITHDRAWAL_COMMISSION,
     upiId: undefined,
     upiName: undefined,
-    merchantPaymentUrl: undefined,
+    qrCodeUrl: undefined,
     apkDownloadUrl: undefined,
   };
 
@@ -60,41 +60,24 @@ export const useAppSettings = () => {
     }
   };
 
-  const updateUPISettings = async (upiId: string, upiName: string, merchantPaymentUrl?: string) => {
-    if (!upiId.trim() && !merchantPaymentUrl?.trim()) {
-      toast.error('Either UPI ID or Merchant Payment URL is required');
+  const updateUPISettings = async (upiId: string, upiName: string) => {
+    if (!upiId.trim()) {
+      toast.error('UPI ID is required');
       return false;
     }
-    if (upiId.trim() && !upiName.trim()) {
-      toast.error('UPI Name is required when UPI ID is provided');
+    if (!upiName.trim()) {
+      toast.error('UPI Name is required');
       return false;
     }
 
     try {
-      const updateData: any = {
-        updated_at: new Date(),
-      };
-
-      if (upiId.trim()) {
-        updateData.upiId = upiId.trim();
-        updateData.upiName = upiName.trim();
-      }
-
-      if (merchantPaymentUrl?.trim()) {
-        // Validate merchant URL format
-        if (!merchantPaymentUrl.trim().startsWith('upi://pay')) {
-          toast.error('Merchant Payment URL must start with "upi://pay"');
-          return false;
-        }
-        updateData.merchantPaymentUrl = merchantPaymentUrl.trim();
-      } else {
-        // If merchant URL is empty, remove it
-        updateData.merchantPaymentUrl = null;
-      }
-
       await setDoc(
         doc(firestore, 'settings', SETTINGS_DOC_ID),
-        updateData,
+        {
+          upiId: upiId.trim(),
+          upiName: upiName.trim(),
+          updated_at: new Date(),
+        },
         { merge: true }
       );
       toast.success('UPI settings updated successfully');
@@ -102,6 +85,38 @@ export const useAppSettings = () => {
     } catch (err: any) {
       console.error('Error updating UPI settings:', err);
       toast.error('Failed to update UPI settings');
+      return false;
+    }
+  };
+
+  const updateQRCodeUrl = async (qrCodeUrl: string) => {
+    if (!qrCodeUrl.trim()) {
+      toast.error('QR Code URL is required');
+      return false;
+    }
+
+    // Basic URL validation
+    try {
+      new URL(qrCodeUrl.trim());
+    } catch {
+      toast.error('Please enter a valid URL');
+      return false;
+    }
+
+    try {
+      await setDoc(
+        doc(firestore, 'settings', SETTINGS_DOC_ID),
+        {
+          qrCodeUrl: qrCodeUrl.trim(),
+          updated_at: new Date(),
+        },
+        { merge: true }
+      );
+      toast.success('QR Code updated successfully');
+      return true;
+    } catch (err: any) {
+      console.error('Error updating QR Code URL:', err);
+      toast.error('Failed to update QR Code');
       return false;
     }
   };
@@ -143,12 +158,13 @@ export const useAppSettings = () => {
     withdrawalCommission: settings.withdrawalCommission,
     upiId: settings.upiId,
     upiName: settings.upiName,
-    merchantPaymentUrl: settings.merchantPaymentUrl,
+    qrCodeUrl: settings.qrCodeUrl,
     apkDownloadUrl: settings.apkDownloadUrl,
     loading,
     error,
     updateWithdrawalCommission,
     updateUPISettings,
+    updateQRCodeUrl,
     updateAPKDownloadUrl,
   };
 };

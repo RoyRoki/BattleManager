@@ -4,7 +4,6 @@ import { collection, query, where, addDoc } from 'firebase/firestore';
 import { firestore } from '../services/firebaseService';
 import { useAuth } from '../contexts/AuthContext';
 import { usePoints } from '../contexts/PointsContext';
-import { generateAddMoneyUPIString, generateMerchantPaymentUrl } from '../services/upiService';
 import { withdrawalSchema } from '../utils/validations';
 import { MIN_WITHDRAW, PRESET_WITHDRAWAL_AMOUNTS } from '../utils/constants';
 import { useAppSettings } from '../hooks/useAppSettings';
@@ -12,28 +11,15 @@ import { useFirestoreTransaction } from '../hooks/useFirestoreTransaction';
 import { Payment } from '../types';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
-import { HiClipboardCopy } from 'react-icons/hi';
 
 // Preset amounts for adding money
 const PRESET_AMOUNTS = [100, 200, 500, 1000];
 
-// Helper function to extract UPI ID from merchant URL
-const extractUpiIdFromMerchantUrl = (merchantUrl: string): string | null => {
-  try {
-    const match = merchantUrl.match(/pa=([^&]+)/);
-    if (match && match[1]) {
-      return decodeURIComponent(match[1]);
-    }
-  } catch (error) {
-    console.error('Error extracting UPI ID from merchant URL:', error);
-  }
-  return null;
-};
 
 export const MoneyPage: React.FC = () => {
   const { user } = useAuth();
   const { points } = usePoints();
-  const { withdrawalCommission, upiId, upiName, merchantPaymentUrl, loading: settingsLoading } = useAppSettings();
+  const { withdrawalCommission, qrCodeUrl, loading: settingsLoading } = useAppSettings();
   const { deductPoints } = useFirestoreTransaction();
   const [activeTab, setActiveTab] = useState<'add' | 'withdraw' | 'history'>('add');
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
@@ -59,74 +45,6 @@ export const MoneyPage: React.FC = () => {
       : null
   ) as unknown as [{ docs: any[] } | null, boolean]) || [null, true];
 
-  const handleAddMoney = async () => {
-    if (!user) {
-      toast.error('Please login');
-      return;
-    }
-
-    if (!selectedAmount) {
-      toast.error('Please select an amount');
-      return;
-    }
-
-    // Check if payment settings are configured
-    if (!merchantPaymentUrl && (!upiId || !upiName)) {
-      toast.error('Payment is temporarily down. Please contact admin.');
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      // Create payment request for admin approval
-      await addDoc(collection(firestore, 'payments'), {
-        user_email: user.email,
-        user_name: user.name || 'Unknown',
-        amount: selectedAmount,
-        status: 'pending',
-        type: 'add_money',
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
-
-      // Generate UPI payment link
-      // Priority: Use merchant URL if available, otherwise use normal UPI
-      let upiString: string;
-      if (merchantPaymentUrl) {
-        try {
-          upiString = generateMerchantPaymentUrl(merchantPaymentUrl, selectedAmount);
-        } catch (error: any) {
-          console.error('Error generating merchant payment URL:', error);
-          toast.error('Invalid merchant payment URL. Please contact admin.');
-          setIsProcessing(false);
-          return;
-        }
-      } else {
-        upiString = generateAddMoneyUPIString(
-          upiId!,
-          upiName!,
-          selectedAmount,
-          `Add ${selectedAmount} Points - ${user.email}`
-        );
-      }
-
-      // Open UPI payment app
-      window.location.href = upiString;
-
-      toast.success(
-        'Payment request sent! Complete the payment in your UPI app. Admin will verify and approve.',
-        { duration: 5000 }
-      );
-
-      setSelectedAmount(null);
-    } catch (error: any) {
-      console.error('Payment error:', error);
-      toast.error(error.message || 'Failed to process payment');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   const handleManualPayment = async () => {
     if (!user) {
@@ -326,19 +244,19 @@ export const MoneyPage: React.FC = () => {
             <h3 className="text-xl font-heading text-primary mb-4">Add Money</h3>
             {settingsLoading ? (
               <p className="text-sm text-gray-400 mb-6">Loading payment settings...</p>
-            ) : !merchantPaymentUrl && (!upiId || !upiName) ? (
+            ) : !qrCodeUrl ? (
               <div className="bg-red-900/30 border border-red-700 rounded-lg p-4 mb-6">
                 <p className="text-red-300 font-heading">Payment is temporarily down</p>
-                <p className="text-sm text-red-400 mt-1">Please contact admin to configure payment settings.</p>
+                <p className="text-sm text-red-400 mt-1">Please contact admin to configure payment QR code.</p>
               </div>
             ) : (
               <p className="text-sm text-gray-400 mb-6">
-                Select an amount to add. You'll be redirected to your UPI app to complete the payment.
+                Select an amount to add. Scan the QR code to complete the payment manually.
               </p>
             )}
 
             {/* Preset Amount Buttons */}
-            {(!settingsLoading && (merchantPaymentUrl || (upiId && upiName))) && (
+            {(!settingsLoading && qrCodeUrl) && (
             <div className="grid grid-cols-2 gap-3 mb-6">
               {PRESET_AMOUNTS.map((amount) => (
                 <motion.button
@@ -370,36 +288,22 @@ export const MoneyPage: React.FC = () => {
               </motion.div>
             )}
 
-            {/* Payment Buttons - Only show when amount is selected and settings are configured */}
-            {selectedAmount && !showManualPayment && (merchantPaymentUrl || (upiId && upiName)) && (
+            {/* Manual Payment Button - Only show when amount is selected and QR code is configured */}
+            {selectedAmount && !showManualPayment && qrCodeUrl && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="space-y-3 mb-6"
+                className="mb-6"
               >
-                <div className="flex flex-col gap-3">
-                  {/* UPI Payment Button */}
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleAddMoney}
-                    disabled={isProcessing}
-                    className="w-full bg-primary text-bg py-4 rounded-lg font-heading text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-opacity-90"
-                  >
-                    {isProcessing ? 'Processing...' : 'Pay with UPI'}
-                  </motion.button>
-
-                  {/* Manual Payment Button */}
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowManualPayment(true)}
-                    disabled={isProcessing}
-                    className="w-full bg-cyan-600 hover:bg-cyan-700 text-white py-4 rounded-lg font-heading text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Manual Payment with Transaction ID
-                  </motion.button>
-                </div>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowManualPayment(true)}
+                  disabled={isProcessing}
+                  className="w-full bg-primary text-bg py-4 rounded-lg font-heading text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-opacity-90"
+                >
+                  Manual Payment with Transaction ID
+                </motion.button>
               </motion.div>
             )}
 
@@ -428,68 +332,31 @@ export const MoneyPage: React.FC = () => {
                 </div>
 
                 {/* Payment Details Display */}
-                <div className="space-y-3">
-                  <div className="bg-bg-secondary rounded-lg p-4 space-y-2">
-                    {/* UPI ID - Clickable to copy */}
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">UPI ID:</span>
-                      <button
-                        onClick={async () => {
-                          try {
-                            const upiIdToCopy = merchantPaymentUrl 
-                              ? extractUpiIdFromMerchantUrl(merchantPaymentUrl) || ''
-                              : upiId || '';
-                            if (upiIdToCopy) {
-                              await navigator.clipboard.writeText(upiIdToCopy);
-                              toast.success('UPI ID copied to clipboard!', {
-                                icon: '📋',
-                                duration: 2000,
-                              });
-                            }
-                          } catch (error) {
-                            console.error('Failed to copy:', error);
-                            toast.error('Failed to copy UPI ID');
-                          }
-                        }}
-                        className="text-white font-heading text-sm hover:text-primary transition-colors bg-transparent hover:bg-transparent border-none cursor-pointer flex items-center gap-2"
-                        title="Click to copy UPI ID"
-                        aria-label="Copy UPI ID"
-                      >
-                        <span>
-                          {merchantPaymentUrl 
-                            ? extractUpiIdFromMerchantUrl(merchantPaymentUrl) || 'N/A'
-                            : upiId || 'N/A'
-                          }
-                        </span>
-                        <HiClipboardCopy className="text-black" size={16} />
-                      </button>
+                <div className="space-y-4">
+                  {/* QR Code Display */}
+                  {qrCodeUrl && (
+                    <div className="bg-bg-secondary rounded-lg p-4 flex flex-col items-center">
+                      <p className="text-sm text-gray-400 mb-3">Scan this QR code to pay</p>
+                      <motion.img
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        src={qrCodeUrl}
+                        alt="Payment QR Code"
+                        className="max-w-full max-h-64 rounded-lg border-2 border-primary/30"
+                      />
                     </div>
-                    
-                    {/* Merchant Name - Only show for regular UPI */}
-                    {!merchantPaymentUrl && upiName && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Merchant Name:</span>
-                        <span className="text-white font-heading">{upiName}</span>
-                      </div>
-                    )}
-                    
-                    {/* Payment Type - Only show for merchant URL */}
-                    {merchantPaymentUrl && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Payment Type:</span>
-                        <span className="text-white font-heading">Merchant Payment</span>
-                      </div>
-                    )}
-                    
-                    {/* Amount - Always show */}
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Amount:</span>
-                      <span className="text-primary font-heading text-lg">₹{selectedAmount}</span>
+                  )}
+                  
+                  {/* Amount Display */}
+                  <div className="bg-bg-secondary rounded-lg p-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Amount to Pay:</span>
+                      <span className="text-primary font-heading text-xl">₹{selectedAmount}</span>
                     </div>
                   </div>
                   
                   <p className="text-sm text-gray-400 text-center">
-                    Complete the payment manually using your payment app with the UPI ID above, then enter your transaction ID below.
+                    Scan the QR code above to complete the payment, then enter your transaction ID below.
                   </p>
 
                   {/* Transaction ID Input */}
