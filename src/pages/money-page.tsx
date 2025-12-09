@@ -12,9 +12,23 @@ import { useFirestoreTransaction } from '../hooks/useFirestoreTransaction';
 import { Payment } from '../types';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
+import { HiClipboardCopy } from 'react-icons/hi';
 
 // Preset amounts for adding money
 const PRESET_AMOUNTS = [100, 200, 500, 1000];
+
+// Helper function to extract UPI ID from merchant URL
+const extractUpiIdFromMerchantUrl = (merchantUrl: string): string | null => {
+  try {
+    const match = merchantUrl.match(/pa=([^&]+)/);
+    if (match && match[1]) {
+      return decodeURIComponent(match[1]);
+    }
+  } catch (error) {
+    console.error('Error extracting UPI ID from merchant URL:', error);
+  }
+  return null;
+};
 
 export const MoneyPage: React.FC = () => {
   const { user } = useAuth();
@@ -27,10 +41,13 @@ export const MoneyPage: React.FC = () => {
   const [bankAccountNo, setBankAccountNo] = useState('');
   const [ifscCode, setIfscCode] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showManualPayment, setShowManualPayment] = useState(false);
+  const [transactionId, setTransactionId] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{
     bank_account_no?: string;
     ifsc_code?: string;
     amount?: string;
+    transaction_id?: string;
   }>({});
 
   const [payments, loading] = (useCollection(
@@ -106,6 +123,53 @@ export const MoneyPage: React.FC = () => {
     } catch (error: any) {
       console.error('Payment error:', error);
       toast.error(error.message || 'Failed to process payment');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleManualPayment = async () => {
+    if (!user) {
+      toast.error('Please login');
+      return;
+    }
+
+    if (!selectedAmount) {
+      toast.error('Please select an amount');
+      return;
+    }
+
+    if (!transactionId.trim()) {
+      setFieldErrors({ ...fieldErrors, transaction_id: 'Transaction ID is required' });
+      toast.error('Please enter transaction ID');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      // Create payment request with transaction ID for admin approval
+      await addDoc(collection(firestore, 'payments'), {
+        user_email: user.email,
+        user_name: user.name || 'Unknown',
+        amount: selectedAmount,
+        status: 'pending',
+        type: 'add_money',
+        transaction_id: transactionId.trim(),
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      toast.success('Payment request submitted! Admin will verify and approve.', { duration: 5000 });
+
+      // Reset form
+      setSelectedAmount(null);
+      setTransactionId('');
+      setShowManualPayment(false);
+      setFieldErrors({});
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      toast.error(error.message || 'Failed to submit payment request');
     } finally {
       setIsProcessing(false);
     }
@@ -306,28 +370,172 @@ export const MoneyPage: React.FC = () => {
               </motion.div>
             )}
 
-            {/* Pay Button */}
-            <motion.button
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              onClick={handleAddMoney}
-              disabled={!selectedAmount || isProcessing}
-              className="w-full bg-primary text-bg py-4 rounded-lg font-heading text-lg hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isProcessing ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-bg border-t-transparent rounded-full animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  Pay with UPI
-                </>
-              )}
-            </motion.button>
+            {/* Payment Buttons - Only show when amount is selected and settings are configured */}
+            {selectedAmount && !showManualPayment && (merchantPaymentUrl || (upiId && upiName)) && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-3 mb-6"
+              >
+                <div className="flex flex-col gap-3">
+                  {/* UPI Payment Button */}
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleAddMoney}
+                    disabled={isProcessing}
+                    className="w-full bg-primary text-bg py-4 rounded-lg font-heading text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-opacity-90"
+                  >
+                    {isProcessing ? 'Processing...' : 'Pay with UPI'}
+                  </motion.button>
+
+                  {/* Manual Payment Button */}
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowManualPayment(true)}
+                    disabled={isProcessing}
+                    className="w-full bg-cyan-600 hover:bg-cyan-700 text-white py-4 rounded-lg font-heading text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Manual Payment with Transaction ID
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Manual Payment UI */}
+            {selectedAmount && showManualPayment && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-bg border border-primary/30 rounded-lg p-6 mb-6 space-y-4"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h4 className="text-lg font-heading text-primary">Manual Payment Details</h4>
+                    <p className="text-xs text-gray-400 mt-1">Enter your transaction ID</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowManualPayment(false);
+                      setTransactionId('');
+                      setFieldErrors({ ...fieldErrors, transaction_id: undefined });
+                    }}
+                    className="text-gray-400 hover:text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Payment Details Display */}
+                <div className="space-y-3">
+                  <div className="bg-bg-secondary rounded-lg p-4 space-y-2">
+                    {/* UPI ID - Clickable to copy */}
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">UPI ID:</span>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const upiIdToCopy = merchantPaymentUrl 
+                              ? extractUpiIdFromMerchantUrl(merchantPaymentUrl) || ''
+                              : upiId || '';
+                            if (upiIdToCopy) {
+                              await navigator.clipboard.writeText(upiIdToCopy);
+                              toast.success('UPI ID copied to clipboard!', {
+                                icon: '📋',
+                                duration: 2000,
+                              });
+                            }
+                          } catch (error) {
+                            console.error('Failed to copy:', error);
+                            toast.error('Failed to copy UPI ID');
+                          }
+                        }}
+                        className="text-white font-heading text-sm hover:text-primary transition-colors bg-transparent hover:bg-transparent border-none cursor-pointer flex items-center gap-2"
+                        title="Click to copy UPI ID"
+                        aria-label="Copy UPI ID"
+                      >
+                        <span>
+                          {merchantPaymentUrl 
+                            ? extractUpiIdFromMerchantUrl(merchantPaymentUrl) || 'N/A'
+                            : upiId || 'N/A'
+                          }
+                        </span>
+                        <HiClipboardCopy className="text-black" size={16} />
+                      </button>
+                    </div>
+                    
+                    {/* Merchant Name - Only show for regular UPI */}
+                    {!merchantPaymentUrl && upiName && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Merchant Name:</span>
+                        <span className="text-white font-heading">{upiName}</span>
+                      </div>
+                    )}
+                    
+                    {/* Payment Type - Only show for merchant URL */}
+                    {merchantPaymentUrl && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Payment Type:</span>
+                        <span className="text-white font-heading">Merchant Payment</span>
+                      </div>
+                    )}
+                    
+                    {/* Amount - Always show */}
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Amount:</span>
+                      <span className="text-primary font-heading text-lg">₹{selectedAmount}</span>
+                    </div>
+                  </div>
+                  
+                  <p className="text-sm text-gray-400 text-center">
+                    Complete the payment manually using your payment app with the UPI ID above, then enter your transaction ID below.
+                  </p>
+
+                  {/* Transaction ID Input */}
+                  <div>
+                    <label className="block text-sm mb-2 text-gray-400">Transaction ID</label>
+                    <input
+                      type="text"
+                      value={transactionId}
+                      onChange={(e) => {
+                        setTransactionId(e.target.value);
+                        if (fieldErrors.transaction_id) {
+                          setFieldErrors({ ...fieldErrors, transaction_id: undefined });
+                        }
+                      }}
+                      placeholder="Enter transaction ID from your payment app"
+                      className={`w-full bg-bg border rounded-lg px-4 py-3 focus:outline-none text-white ${
+                        fieldErrors.transaction_id
+                          ? 'border-red-500 focus:border-red-500'
+                          : 'border-gray-700 focus:border-primary'
+                      }`}
+                    />
+                    {fieldErrors.transaction_id && (
+                      <p className="text-red-400 text-xs mt-1">{fieldErrors.transaction_id}</p>
+                    )}
+                  </div>
+
+                  {/* Submit Button */}
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleManualPayment}
+                    disabled={isProcessing || !transactionId.trim()}
+                    className="w-full bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-80 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-bg border-t-transparent rounded-full animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      'Submit Payment'
+                    )}
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
 
             <p className="text-xs text-gray-500 mt-4 text-center">
               After payment, admin will verify and approve your points within 24 hours.
