@@ -257,7 +257,7 @@ export const PaymentManagement: React.FC = () => {
                             </p>
                             {payment.transaction_id && (
                               <div className="mt-2 p-2 bg-cyan-900/20 border border-cyan-600/50 rounded-lg">
-                                <p className="text-xs text-cyan-400 mb-1">Manual Payment - Transaction ID:</p>
+                                <p className="text-xs text-cyan-400 mb-1">Manual Payment - UTR:</p>
                                 <p className="text-sm text-cyan-300 font-mono break-all">{payment.transaction_id}</p>
                               </div>
                             )}

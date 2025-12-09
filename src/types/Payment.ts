@@ -18,7 +18,7 @@ export interface Payment {
   approved_at?: Date;
   tournament_id?: string; // Tournament ID for tournament winnings
   tournament_name?: string; // Tournament name for display
-  transaction_id?: string; // Transaction ID for iPhone manual payments
+  transaction_id?: string; // UTR (12 digits) for manual payments
   created_at: Date;
   updated_at: Date;
   notes?: string;

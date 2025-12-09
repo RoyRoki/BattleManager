@@ -58,15 +58,23 @@ export const MoneyPage: React.FC = () => {
     }
 
     if (!transactionId.trim()) {
-      setFieldErrors({ ...fieldErrors, transaction_id: 'Transaction ID is required' });
-      toast.error('Please enter transaction ID');
+      setFieldErrors({ ...fieldErrors, transaction_id: 'UTR is required' });
+      toast.error('Please enter UTR');
+      return;
+    }
+
+    // Validate UTR is exactly 12 digits
+    const utrRegex = /^\d{12}$/;
+    if (!utrRegex.test(transactionId.trim())) {
+      setFieldErrors({ ...fieldErrors, transaction_id: 'UTR must be exactly 12 digits' });
+      toast.error('UTR must be exactly 12 digits');
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      // Create payment request with transaction ID for admin approval
+      // Create payment request with UTR for admin approval
       await addDoc(collection(firestore, 'payments'), {
         user_email: user.email,
         user_name: user.name || 'Unknown',
@@ -302,7 +310,7 @@ export const MoneyPage: React.FC = () => {
                   disabled={isProcessing}
                   className="w-full bg-primary text-bg py-4 rounded-lg font-heading text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-opacity-90"
                 >
-                  Manual Payment with Transaction ID
+                  Manual Payment with UTR
                 </motion.button>
               </motion.div>
             )}
@@ -317,7 +325,7 @@ export const MoneyPage: React.FC = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h4 className="text-lg font-heading text-primary">Manual Payment Details</h4>
-                    <p className="text-xs text-gray-400 mt-1">Enter your transaction ID</p>
+                    <p className="text-xs text-gray-400 mt-1">Enter your UTR (12 digits)</p>
                   </div>
                   <button
                     onClick={() => {
@@ -386,22 +394,25 @@ export const MoneyPage: React.FC = () => {
                   </div>
                   
                   <p className="text-sm text-gray-400 text-center">
-                    Scan the QR code above to complete the payment, then enter your transaction ID below.
+                    Scan the QR code above to complete the payment, then enter your UTR (12 digits) below.
                   </p>
 
-                  {/* Transaction ID Input */}
+                  {/* UTR Input */}
                   <div>
-                    <label className="block text-sm mb-2 text-gray-400">Transaction ID</label>
+                    <label className="block text-sm mb-2 text-gray-400">UTR (12 digits)</label>
                     <input
                       type="text"
                       value={transactionId}
                       onChange={(e) => {
-                        setTransactionId(e.target.value);
+                        // Only allow digits and limit to 12 characters
+                        const value = e.target.value.replace(/\D/g, '').slice(0, 12);
+                        setTransactionId(value);
                         if (fieldErrors.transaction_id) {
                           setFieldErrors({ ...fieldErrors, transaction_id: undefined });
                         }
                       }}
-                      placeholder="Enter transaction ID from your payment app"
+                      placeholder="Enter 12 digit UTR from your payment app"
+                      maxLength={12}
                       className={`w-full bg-bg border rounded-lg px-4 py-3 focus:outline-none text-white ${
                         fieldErrors.transaction_id
                           ? 'border-red-500 focus:border-red-500'
@@ -411,6 +422,11 @@ export const MoneyPage: React.FC = () => {
                     {fieldErrors.transaction_id && (
                       <p className="text-red-400 text-xs mt-1">{fieldErrors.transaction_id}</p>
                     )}
+                    {!fieldErrors.transaction_id && transactionId.length > 0 && transactionId.length < 12 && (
+                      <p className="text-gray-500 text-xs mt-1">
+                        {12 - transactionId.length} digit{12 - transactionId.length !== 1 ? 's' : ''} remaining
+                      </p>
+                    )}
                   </div>
 
                   {/* Submit Button */}
@@ -418,7 +434,7 @@ export const MoneyPage: React.FC = () => {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleManualPayment}
-                    disabled={isProcessing || !transactionId.trim()}
+                    disabled={isProcessing || !transactionId.trim() || transactionId.length !== 12}
                     className="w-full bg-primary text-bg py-3 rounded-lg font-heading hover:bg-opacity-80 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {isProcessing ? (
