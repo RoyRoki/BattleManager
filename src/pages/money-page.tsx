@@ -37,7 +37,7 @@ export const MoneyPage: React.FC = () => {
     user
       ? query(
           collection(firestore, 'payments'),
-          where('user_mobile', '==', user.mobile_no)
+          where('user_email', '==', user.email)
         )
       : null
   ) as unknown as [{ docs: any[] } | null, boolean]) || [null, true];
@@ -64,10 +64,11 @@ export const MoneyPage: React.FC = () => {
     try {
       // Create payment request for admin approval
       await addDoc(collection(firestore, 'payments'), {
-        user_mobile: user.mobile_no,
+        user_email: user.email,
         user_name: user.name || 'Unknown',
         amount: selectedAmount,
         status: 'pending',
+        type: 'add_money',
         created_at: new Date(),
         updated_at: new Date(),
       });
@@ -89,7 +90,7 @@ export const MoneyPage: React.FC = () => {
           upiId!,
           upiName!,
           selectedAmount,
-          `Add ${selectedAmount} Points - ${user.mobile_no}`
+          `Add ${selectedAmount} Points - ${user.email}`
         );
       }
 
@@ -163,7 +164,7 @@ export const MoneyPage: React.FC = () => {
       const finalAmount = selectedWithdrawAmount - commissionAmount;
 
       // Deduct points immediately
-      const deducted = await deductPoints(user.mobile_no, selectedWithdrawAmount);
+      const deducted = await deductPoints(user.email, selectedWithdrawAmount);
       if (!deducted) {
         setIsProcessing(false);
         return;
@@ -171,7 +172,7 @@ export const MoneyPage: React.FC = () => {
 
       // Create withdrawal request
       await addDoc(collection(firestore, 'payments'), {
-        user_mobile: user.mobile_no,
+        user_email: user.email,
         user_name: user.name || 'Unknown',
         amount: selectedWithdrawAmount,
         bank_account_no: withdrawalData.bank_account_no,
