@@ -37,7 +37,7 @@ import {
   DateRange,
   DateRangeFilter,
 } from '../../utils/analytics';
-import { Select, SelectOption } from '../../shared/components/ui/Select';
+import { Select } from '../../shared/components/ui/Select';
 
 interface StatCardProps {
   label: string;
@@ -128,7 +128,7 @@ export const AdminAnalytics: React.FC = () => {
   ) as unknown as [{ docs: any[] } | null, boolean, Error | undefined];
 
   const [dateRange, setDateRange] = useState<DateRange>('all');
-  const [customRange, setCustomRange] = useState<DateRangeFilter>({});
+  const [customRange] = useState<DateRangeFilter>({});
   const [groupBy, setGroupBy] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [tableSort, setTableSort] = useState<{
     field: 'date' | 'type' | 'user' | 'amount' | 'status';
@@ -630,7 +630,7 @@ export const AdminAnalytics: React.FC = () => {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
                         outerRadius={100}
                         fill="#8884d8"
                         dataKey="value"

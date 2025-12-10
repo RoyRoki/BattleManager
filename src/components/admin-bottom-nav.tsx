@@ -5,7 +5,6 @@ import {
   HiHome,
   HiUsers,
   HiCog,
-  HiBell,
   HiChartBar,
 } from 'react-icons/hi';
 import { MdEmojiEvents } from 'react-icons/md';
