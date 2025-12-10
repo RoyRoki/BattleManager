@@ -11,6 +11,7 @@ import {
   HiChat,
   HiUserGroup,
   HiArrowRight,
+  HiChartBar,
 } from 'react-icons/hi';
 import { FaTrophy } from 'react-icons/fa';
 import { useSupportChat } from '../../hooks/useSupportChat';
@@ -250,6 +251,14 @@ export const AdminDashboard: React.FC = () => {
       link: ROUTES.ADMIN_SUPPORT_CHAT,
       color: 'primary',
       delay: 0.8,
+    },
+    {
+      title: 'Analytics',
+      description: 'View financial insights, transaction analytics, and revenue trends with detailed charts and graphs.',
+      icon: HiChartBar,
+      link: ROUTES.ADMIN_ANALYTICS,
+      color: 'primary',
+      delay: 0.9,
     },
   ];
 

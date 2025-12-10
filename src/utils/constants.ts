@@ -34,6 +34,7 @@ export const ROUTES = {
   ADMIN_SETTINGS: '/admin/settings',
   ADMIN_NOTIFICATIONS: '/admin/notifications',
   ADMIN_SUPPORT_CHAT: '/admin/support-chat',
+  ADMIN_ANALYTICS: '/admin/analytics',
 } as const;
 
 

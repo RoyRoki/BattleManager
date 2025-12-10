@@ -6,6 +6,7 @@ import {
   HiUsers,
   HiCog,
   HiBell,
+  HiChartBar,
 } from 'react-icons/hi';
 import { MdEmojiEvents } from 'react-icons/md';
 import { ROUTES } from '../utils/constants';
@@ -14,8 +15,8 @@ const adminNavItems = [
   { path: ROUTES.ADMIN_DASHBOARD, label: 'Dashboard', icon: HiHome },
   { path: ROUTES.ADMIN_TOURNAMENTS, label: 'Tournaments', icon: MdEmojiEvents },
   { path: ROUTES.ADMIN_USERS, label: 'Users', icon: HiUsers },
+  { path: ROUTES.ADMIN_ANALYTICS, label: 'Analytics', icon: HiChartBar },
   { path: ROUTES.ADMIN_SETTINGS, label: 'Settings', icon: HiCog },
-  { path: ROUTES.ADMIN_NOTIFICATIONS, label: 'Notifications', icon: HiBell },
 ];
 
 export const AdminBottomNav: React.FC = () => {

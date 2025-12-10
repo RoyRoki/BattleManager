@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection } from 'firebase/firestore';
+import { collection, deleteDoc, doc } from 'firebase/firestore';
 import { firestore } from '../../services/firebaseService';
 import { User } from '../../types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HiSearch, HiX } from 'react-icons/hi';
+import { HiSearch, HiX, HiTrash } from 'react-icons/hi';
 import { useFirestoreTransaction } from '../../hooks/useFirestoreTransaction';
 import { ConfirmDialog } from '../../shared/components/ui/ConfirmDialog';
 import toast from 'react-hot-toast';
@@ -43,6 +43,28 @@ export const UserManagement: React.FC = () => {
     userEmail: string;
     amount: number;
     actionType: 'credit' | 'debit';
+  } | null>(null);
+
+  // Delete confirmation modal state (with input)
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    user: User | null;
+    userId: string | null;
+    deleteInput: string;
+    error: string;
+  }>({
+    isOpen: false,
+    user: null,
+    userId: null,
+    deleteInput: '',
+    error: '',
+  });
+
+  // Final delete confirmation dialog state
+  const [finalDeleteDialog, setFinalDeleteDialog] = useState<{
+    isOpen: boolean;
+    user: User | null;
+    userId: string | null;
   } | null>(null);
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -237,13 +259,96 @@ export const UserManagement: React.FC = () => {
     });
   };
 
+  // Handler for delete button click
+  const handleDeleteClick = (user: User, userId: string) => {
+    setDeleteModal({
+      isOpen: true,
+      user,
+      userId,
+      deleteInput: '',
+      error: '',
+    });
+  };
+
+  // Handler for delete input change
+  const handleDeleteInputChange = (value: string) => {
+    setDeleteModal((prev) => ({
+      ...prev,
+      deleteInput: value,
+      error: '',
+    }));
+  };
+
+  // Handler for delete input submit
+  const handleDeleteInputSubmit = () => {
+    if (deleteModal.deleteInput.trim().toUpperCase() !== 'DELETE') {
+      setDeleteModal((prev) => ({
+        ...prev,
+        error: 'Please type "DELETE" to confirm',
+      }));
+      return;
+    }
+
+    if (!deleteModal.user || !deleteModal.userId) {
+      toast.error('User not found');
+      return;
+    }
+
+    // Close delete input modal and show final confirmation
+    setDeleteModal({
+      isOpen: false,
+      user: null,
+      userId: null,
+      deleteInput: '',
+      error: '',
+    });
+
+    setFinalDeleteDialog({
+      isOpen: true,
+      user: deleteModal.user,
+      userId: deleteModal.userId,
+    });
+  };
+
+  // Handler for final delete confirmation
+  const handleFinalDeleteConfirm = async () => {
+    if (!finalDeleteDialog?.user || !finalDeleteDialog?.userId) {
+      toast.error('User not found');
+      setFinalDeleteDialog(null);
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await deleteDoc(doc(firestore, 'users', finalDeleteDialog.userId));
+      toast.success(`User ${finalDeleteDialog.user.name || finalDeleteDialog.user.email} deleted successfully`);
+      setFinalDeleteDialog(null);
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      toast.error(error.message || 'Failed to delete user');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handler to close delete modal
+  const handleCloseDeleteModal = () => {
+    setDeleteModal({
+      isOpen: false,
+      user: null,
+      userId: null,
+      deleteInput: '',
+      error: '',
+    });
+  };
+
   return (
     <div className="min-h-screen bg-bg pb-20">
-      <div className="container mx-auto px-4 py-6">
-        <h1 className="text-3xl font-heading text-primary mb-6 text-glow">User Management</h1>
+      <div className="container mx-auto px-3 md:px-4 py-4 md:py-6">
+        <h1 className="text-2xl md:text-3xl font-heading text-primary mb-6 text-glow">User Management</h1>
 
         {/* Search Bar */}
-        <div className="mb-6">
+        <div className="mb-4 md:mb-6">
           <div className="relative">
             <HiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
@@ -251,7 +356,7 @@ export const UserManagement: React.FC = () => {
               placeholder="Search by name or FF ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-bg-secondary border border-gray-800 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-colors"
+              className="w-full bg-bg-secondary border border-gray-800 rounded-lg pl-10 pr-4 py-2.5 md:py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-colors text-sm md:text-base"
             />
           </div>
         </div>
@@ -301,49 +406,59 @@ export const UserManagement: React.FC = () => {
                   animate={{ opacity: 1, y: 0 }}
                   className="bg-bg-secondary border border-gray-800 rounded-lg p-4"
                 >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-heading text-primary">
-                        {user.name || 'No Name'}
-                      </h3>
-                      <p className="text-sm text-gray-400">Email: {user.email}</p>
+                  <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between mb-2">
+                        <h3 className="text-lg font-heading text-primary break-words pr-2">
+                          {user.name || 'No Name'}
+                        </h3>
+                        <span
+                          className={`text-xs px-2 py-1 rounded flex-shrink-0 ${
+                            user.is_active
+                              ? 'bg-orange-900 text-orange-300'
+                              : 'bg-gray-800 text-gray-400'
+                          }`}
+                        >
+                          {user.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-400 break-all">Email: {user.email}</p>
                       {(user as any).ff_id && (
                         <p className="text-sm text-gray-400">FF ID: {(user as any).ff_id}</p>
                       )}
-                      <div className="flex gap-4 mt-2 text-sm">
-                        <span className="text-gray-400">Points: {user.points}</span>
+                      <div className="flex flex-wrap gap-4 mt-2 text-sm">
+                        <span className="text-gray-400">Points: <span className="text-white font-heading">{user.points}</span></span>
                         <span className="text-gray-400">
-                          Tournaments: {user.enrolled_tournaments.length}
+                          Tournaments: <span className="text-white font-heading">{user.enrolled_tournaments.length}</span>
                         </span>
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
                         Joined: {user.created_at.toLocaleDateString()}
                       </p>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span
-                        className={`text-xs px-2 py-1 rounded ${
-                          user.is_active
-                            ? 'bg-orange-900 text-orange-300'
-                            : 'bg-gray-800 text-gray-400'
-                        }`}
-                      >
-                        {user.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                      <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 md:items-end">
+                      <div className="flex flex-wrap gap-2 md:flex-nowrap">
                         <button
                           onClick={() => handleCreditClick(user)}
                           disabled={isProcessing}
-                          className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-heading"
+                          className="flex-1 md:flex-none bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-heading"
                         >
                           Credit
                         </button>
                         <button
                           onClick={() => handleDebitClick(user)}
                           disabled={isProcessing}
-                          className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-heading"
+                          className="flex-1 md:flex-none bg-red-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-heading"
                         >
                           Debit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(user, doc.id)}
+                          disabled={isProcessing}
+                          className="flex-1 md:flex-none bg-red-800 text-white px-3 py-2 rounded-lg text-sm hover:bg-red-900 transition disabled:opacity-50 disabled:cursor-not-allowed font-heading flex items-center justify-center gap-1"
+                        >
+                          <HiTrash className="w-4 h-4" />
+                          <span className="md:inline">Delete</span>
                         </button>
                       </div>
                     </div>
@@ -374,7 +489,7 @@ export const UserManagement: React.FC = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-bg-secondary border border-primary/30 rounded-lg p-6 max-w-md w-full"
+                className="bg-bg-secondary border border-primary/30 rounded-lg p-4 md:p-6 max-w-md w-full mx-4"
               >
                 {/* Header */}
                 <div className="flex justify-between items-center mb-4">
@@ -458,6 +573,115 @@ export const UserManagement: React.FC = () => {
           confirmVariant={confirmDialog.confirmVariant}
           onConfirm={confirmDialog.onConfirm}
           onCancel={() => setConfirmDialog(null)}
+        />
+      )}
+
+      {/* Delete Input Modal */}
+      <AnimatePresence>
+        {deleteModal.isOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleCloseDeleteModal}
+              className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+            >
+              {/* Modal */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-bg-secondary border border-red-600/30 rounded-lg p-6 max-w-md w-full"
+              >
+                {/* Header */}
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-heading text-red-400">Delete User</h3>
+                  <button
+                    onClick={handleCloseDeleteModal}
+                    className="text-gray-400 hover:text-red-400 transition"
+                  >
+                    <HiX className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* User Info */}
+                {deleteModal.user && (
+                  <div className="mb-4 p-3 bg-bg rounded-lg border border-red-600/20">
+                    <p className="text-sm text-gray-400">User:</p>
+                    <p className="text-white font-heading">{deleteModal.user.name || deleteModal.user.email}</p>
+                    <p className="text-sm text-gray-400 mt-1">Email: {deleteModal.user.email}</p>
+                    {(deleteModal.user as any).ff_id && (
+                      <p className="text-sm text-gray-400">FF ID: {(deleteModal.user as any).ff_id}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Warning */}
+                <div className="mb-4 p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
+                  <p className="text-sm text-red-300">
+                    ⚠️ This action cannot be undone. All user data will be permanently deleted.
+                  </p>
+                </div>
+
+                {/* Delete Input */}
+                <div className="mb-4">
+                  <label className="block text-sm text-gray-400 mb-2">
+                    Type <span className="text-red-400 font-heading">DELETE</span> to confirm
+                  </label>
+                  <input
+                    type="text"
+                    value={deleteModal.deleteInput}
+                    onChange={(e) => handleDeleteInputChange(e.target.value)}
+                    placeholder="Type DELETE"
+                    className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-red-600 transition-colors text-lg uppercase"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleDeleteInputSubmit();
+                      }
+                    }}
+                  />
+                  {deleteModal.error && (
+                    <p className="text-sm text-red-400 mt-2">{deleteModal.error}</p>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCloseDeleteModal}
+                    className="flex-1 bg-bg border border-gray-700 text-gray-300 py-2 rounded-lg hover:bg-bg-tertiary transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteInputSubmit}
+                    disabled={deleteModal.deleteInput.trim().toUpperCase() !== 'DELETE' || isProcessing}
+                    className="flex-1 bg-red-800 text-white py-2 rounded-lg font-heading hover:bg-red-900 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Continue
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Final Delete Confirmation Dialog */}
+      {finalDeleteDialog && (
+        <ConfirmDialog
+          isOpen={finalDeleteDialog.isOpen}
+          title="Final Confirmation"
+          message={`Are you absolutely sure you want to delete user "${finalDeleteDialog.user?.name || finalDeleteDialog.user?.email}"?\n\nThis action is permanent and cannot be undone. All user data, points, and tournament enrollments will be lost.`}
+          confirmText="Delete User"
+          cancelText="Cancel"
+          confirmVariant="danger"
+          onConfirm={handleFinalDeleteConfirm}
+          onCancel={() => setFinalDeleteDialog(null)}
         />
       )}
     </div>

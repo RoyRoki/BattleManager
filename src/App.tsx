@@ -72,6 +72,11 @@ const AdminSupportChat = lazy(() =>
     default: module.AdminSupportChat,
   }))
 );
+const AdminAnalytics = lazy(() =>
+  import('./pages/admin/admin-analytics').then((module) => ({
+    default: module.AdminAnalytics,
+  }))
+);
 const LoginPage = lazy(() =>
   import('./features/auth').then((module) => ({
     default: module.LoginPage,
@@ -224,6 +229,14 @@ function App() {
                       element={
                         <AdminAuth>
                           <AdminSupportChat />
+                        </AdminAuth>
+                      }
+                    />
+                    <Route
+                      path={ROUTES.ADMIN_ANALYTICS}
+                      element={
+                        <AdminAuth>
+                          <AdminAnalytics />
                         </AdminAuth>
                       }
                     />

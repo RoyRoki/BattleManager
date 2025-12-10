@@ -112,3 +112,4 @@ export const QRCodeUpload: React.FC<QRCodeUploadProps> = ({
   );
 };
 
+
