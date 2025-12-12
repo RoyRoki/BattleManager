@@ -99,12 +99,10 @@ export const withdrawalSchema = z.object({
   ifsc_code: ifscSchema,
 });
 
-// Password validation (uppercase, lowercase, number)
+// Password validation (minimum length 3)
 export const passwordSchema = z
   .string()
-  .min(1, 'Password is required')
-  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-  .regex(/[0-9]/, 'Password must contain at least one number');
+  .min(3, 'Password must be at least 3 characters')
+  .max(100, 'Password cannot exceed 100 characters');
 
 

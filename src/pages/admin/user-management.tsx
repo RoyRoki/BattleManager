@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, deleteDoc, doc } from 'firebase/firestore';
+import { collection, updateDoc, doc } from 'firebase/firestore';
 import { firestore } from '../../services/firebaseService';
 import { User } from '../../types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HiSearch, HiX, HiTrash } from 'react-icons/hi';
+import { HiSearch, HiX, HiPencil } from 'react-icons/hi';
 import { useFirestoreTransaction } from '../../hooks/useFirestoreTransaction';
 import { ConfirmDialog } from '../../shared/components/ui/ConfirmDialog';
 import toast from 'react-hot-toast';
+import { ffIdSchema } from '../../utils/validations';
 
 export const UserManagement: React.FC = () => {
   const [users, loading, error] = useCollection(
@@ -45,27 +46,24 @@ export const UserManagement: React.FC = () => {
     actionType: 'credit' | 'debit';
   } | null>(null);
 
-  // Delete confirmation modal state (with input)
-  const [deleteModal, setDeleteModal] = useState<{
+  // Edit modal state
+  const [editModal, setEditModal] = useState<{
     isOpen: boolean;
     user: User | null;
-    userId: string | null;
-    deleteInput: string;
+    userEmail: string;
+    name: string;
+    ffId: string;
+    isActive: boolean;
     error: string;
   }>({
     isOpen: false,
     user: null,
-    userId: null,
-    deleteInput: '',
+    userEmail: '',
+    name: '',
+    ffId: '',
+    isActive: true,
     error: '',
   });
-
-  // Final delete confirmation dialog state
-  const [finalDeleteDialog, setFinalDeleteDialog] = useState<{
-    isOpen: boolean;
-    user: User | null;
-    userId: string | null;
-  } | null>(null);
 
   const [isProcessing, setIsProcessing] = useState(false);
   
@@ -259,85 +257,93 @@ export const UserManagement: React.FC = () => {
     });
   };
 
-  // Handler for delete button click
-  const handleDeleteClick = (user: User, userId: string) => {
-    setDeleteModal({
+  // Handler for edit button click
+  const handleEditClick = (user: User, userEmail: string) => {
+    setEditModal({
       isOpen: true,
       user,
-      userId,
-      deleteInput: '',
+      userEmail,
+      name: user.name || '',
+      ffId: (user as any).ff_id || '',
+      isActive: user.is_active ?? true,
       error: '',
     });
   };
 
-  // Handler for delete input change
-  const handleDeleteInputChange = (value: string) => {
-    setDeleteModal((prev) => ({
+  // Handler for edit field changes
+  const handleEditFieldChange = (field: 'name' | 'ffId' | 'isActive', value: string | boolean) => {
+    setEditModal((prev) => ({
       ...prev,
-      deleteInput: value,
+      [field]: value,
       error: '',
     }));
   };
 
-  // Handler for delete input submit
-  const handleDeleteInputSubmit = () => {
-    if (deleteModal.deleteInput.trim().toUpperCase() !== 'DELETE') {
-      setDeleteModal((prev) => ({
+  // Handler for edit submit
+  const handleEditSubmit = async () => {
+    // Validation
+    if (!editModal.name.trim()) {
+      setEditModal((prev) => ({
         ...prev,
-        error: 'Please type "DELETE" to confirm',
+        error: 'Name is required',
       }));
       return;
     }
 
-    if (!deleteModal.user || !deleteModal.userId) {
-      toast.error('User not found');
-      return;
+    if (editModal.ffId.trim()) {
+      try {
+        ffIdSchema.parse(editModal.ffId);
+      } catch (error: any) {
+        setEditModal((prev) => ({
+          ...prev,
+          error: error.message || 'Invalid FF ID format',
+        }));
+        return;
+      }
     }
 
-    // Close delete input modal and show final confirmation
-    setDeleteModal({
-      isOpen: false,
-      user: null,
-      userId: null,
-      deleteInput: '',
-      error: '',
-    });
-
-    setFinalDeleteDialog({
-      isOpen: true,
-      user: deleteModal.user,
-      userId: deleteModal.userId,
-    });
-  };
-
-  // Handler for final delete confirmation
-  const handleFinalDeleteConfirm = async () => {
-    if (!finalDeleteDialog?.user || !finalDeleteDialog?.userId) {
-      toast.error('User not found');
-      setFinalDeleteDialog(null);
+    if (!editModal.userEmail) {
+      toast.error('User email not found');
       return;
     }
 
     setIsProcessing(true);
     try {
-      await deleteDoc(doc(firestore, 'users', finalDeleteDialog.userId));
-      toast.success(`User ${finalDeleteDialog.user.name || finalDeleteDialog.user.email} deleted successfully`);
-      setFinalDeleteDialog(null);
+      const userRef = doc(firestore, 'users', editModal.userEmail);
+      await updateDoc(userRef, {
+        name: editModal.name.trim(),
+        ff_id: editModal.ffId.trim() || null,
+        is_active: editModal.isActive,
+        updated_at: new Date(),
+      });
+
+      toast.success('User updated successfully');
+      setEditModal({
+        isOpen: false,
+        user: null,
+        userEmail: '',
+        name: '',
+        ffId: '',
+        isActive: true,
+        error: '',
+      });
     } catch (error: any) {
-      console.error('Error deleting user:', error);
-      toast.error(error.message || 'Failed to delete user');
+      console.error('Error updating user:', error);
+      toast.error(error.message || 'Failed to update user');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Handler to close delete modal
-  const handleCloseDeleteModal = () => {
-    setDeleteModal({
+  // Handler to close edit modal
+  const handleCloseEditModal = () => {
+    setEditModal({
       isOpen: false,
       user: null,
-      userId: null,
-      deleteInput: '',
+      userEmail: '',
+      name: '',
+      ffId: '',
+      isActive: true,
       error: '',
     });
   };
@@ -453,12 +459,12 @@ export const UserManagement: React.FC = () => {
                           Debit
                         </button>
                         <button
-                          onClick={() => handleDeleteClick(user, doc.id)}
+                          onClick={() => handleEditClick(user, user.email)}
                           disabled={isProcessing}
-                          className="flex-1 md:flex-none bg-red-800 text-white px-3 py-2 rounded-lg text-sm hover:bg-red-900 transition disabled:opacity-50 disabled:cursor-not-allowed font-heading flex items-center justify-center gap-1"
+                          className="flex-1 md:flex-none bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-heading flex items-center justify-center gap-1"
                         >
-                          <HiTrash className="w-4 h-4" />
-                          <span className="md:inline">Delete</span>
+                          <HiPencil className="w-4 h-4" />
+                          <span className="md:inline">Edit</span>
                         </button>
                       </div>
                     </div>
@@ -576,16 +582,16 @@ export const UserManagement: React.FC = () => {
         />
       )}
 
-      {/* Delete Input Modal */}
+      {/* Edit Modal */}
       <AnimatePresence>
-        {deleteModal.isOpen && (
+        {editModal.isOpen && (
           <>
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={handleCloseDeleteModal}
+              onClick={handleCloseEditModal}
               className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
             >
               {/* Modal */}
@@ -594,75 +600,109 @@ export const UserManagement: React.FC = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-bg-secondary border border-red-600/30 rounded-lg p-6 max-w-md w-full"
+                className="bg-bg-secondary border border-primary/30 rounded-lg p-4 md:p-6 max-w-md w-full mx-4"
               >
                 {/* Header */}
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-heading text-red-400">Delete User</h3>
+                  <h3 className="text-xl font-heading text-primary">Edit User</h3>
                   <button
-                    onClick={handleCloseDeleteModal}
-                    className="text-gray-400 hover:text-red-400 transition"
+                    onClick={handleCloseEditModal}
+                    className="text-gray-400 hover:text-primary transition"
                   >
                     <HiX className="w-6 h-6" />
                   </button>
                 </div>
 
                 {/* User Info */}
-                {deleteModal.user && (
-                  <div className="mb-4 p-3 bg-bg rounded-lg border border-red-600/20">
-                    <p className="text-sm text-gray-400">User:</p>
-                    <p className="text-white font-heading">{deleteModal.user.name || deleteModal.user.email}</p>
-                    <p className="text-sm text-gray-400 mt-1">Email: {deleteModal.user.email}</p>
-                    {(deleteModal.user as any).ff_id && (
-                      <p className="text-sm text-gray-400">FF ID: {(deleteModal.user as any).ff_id}</p>
-                    )}
+                {editModal.user && (
+                  <div className="mb-4 p-3 bg-bg rounded-lg border border-gray-700">
+                    <p className="text-sm text-gray-400">Email:</p>
+                    <p className="text-white font-heading">{editModal.userEmail}</p>
                   </div>
                 )}
 
-                {/* Warning */}
-                <div className="mb-4 p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
-                  <p className="text-sm text-red-300">
-                    ⚠️ This action cannot be undone. All user data will be permanently deleted.
-                  </p>
-                </div>
-
-                {/* Delete Input */}
+                {/* Name Input */}
                 <div className="mb-4">
                   <label className="block text-sm text-gray-400 mb-2">
-                    Type <span className="text-red-400 font-heading">DELETE</span> to confirm
+                    Name <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
-                    value={deleteModal.deleteInput}
-                    onChange={(e) => handleDeleteInputChange(e.target.value)}
-                    placeholder="Type DELETE"
-                    className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-red-600 transition-colors text-lg uppercase"
+                    value={editModal.name}
+                    onChange={(e) => handleEditFieldChange('name', e.target.value)}
+                    placeholder="Enter name"
+                    className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors"
                     autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleDeleteInputSubmit();
-                      }
-                    }}
                   />
-                  {deleteModal.error && (
-                    <p className="text-sm text-red-400 mt-2">{deleteModal.error}</p>
-                  )}
                 </div>
+
+                {/* FF ID Input */}
+                <div className="mb-4">
+                  <label className="block text-sm text-gray-400 mb-2">
+                    Free Fire ID
+                  </label>
+                  <input
+                    type="text"
+                    value={editModal.ffId}
+                    onChange={(e) => handleEditFieldChange('ffId', e.target.value)}
+                    placeholder="Enter FF ID (optional)"
+                    className="w-full bg-bg border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    6-20 characters, letters, numbers, and underscores only
+                  </p>
+                </div>
+
+                {/* Status Toggle */}
+                <div className="mb-4">
+                  <label className="block text-sm text-gray-400 mb-2">
+                    Status
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleEditFieldChange('isActive', true)}
+                      className={`flex-1 py-2 rounded-lg font-heading transition ${
+                        editModal.isActive
+                          ? 'bg-orange-600 text-white'
+                          : 'bg-bg border border-gray-700 text-gray-400'
+                      }`}
+                    >
+                      Active
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleEditFieldChange('isActive', false)}
+                      className={`flex-1 py-2 rounded-lg font-heading transition ${
+                        !editModal.isActive
+                          ? 'bg-gray-600 text-white'
+                          : 'bg-bg border border-gray-700 text-gray-400'
+                      }`}
+                    >
+                      Inactive
+                    </button>
+                  </div>
+                </div>
+
+                {/* Error Message */}
+                {editModal.error && (
+                  <p className="text-sm text-red-400 mb-4">{editModal.error}</p>
+                )}
 
                 {/* Actions */}
                 <div className="flex gap-3">
                   <button
-                    onClick={handleCloseDeleteModal}
+                    onClick={handleCloseEditModal}
                     className="flex-1 bg-bg border border-gray-700 text-gray-300 py-2 rounded-lg hover:bg-bg-tertiary transition"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={handleDeleteInputSubmit}
-                    disabled={deleteModal.deleteInput.trim().toUpperCase() !== 'DELETE' || isProcessing}
-                    className="flex-1 bg-red-800 text-white py-2 rounded-lg font-heading hover:bg-red-900 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleEditSubmit}
+                    disabled={!editModal.name.trim() || isProcessing}
+                    className="flex-1 bg-primary text-bg py-2 rounded-lg font-heading hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Continue
+                    {isProcessing ? 'Saving...' : 'Save Changes'}
                   </button>
                 </div>
               </motion.div>
@@ -670,20 +710,6 @@ export const UserManagement: React.FC = () => {
           </>
         )}
       </AnimatePresence>
-
-      {/* Final Delete Confirmation Dialog */}
-      {finalDeleteDialog && (
-        <ConfirmDialog
-          isOpen={finalDeleteDialog.isOpen}
-          title="Final Confirmation"
-          message={`Are you absolutely sure you want to delete user "${finalDeleteDialog.user?.name || finalDeleteDialog.user?.email}"?\n\nThis action is permanent and cannot be undone. All user data, points, and tournament enrollments will be lost.`}
-          confirmText="Delete User"
-          cancelText="Cancel"
-          confirmVariant="danger"
-          onConfirm={handleFinalDeleteConfirm}
-          onCancel={() => setFinalDeleteDialog(null)}
-        />
-      )}
     </div>
   );
 };

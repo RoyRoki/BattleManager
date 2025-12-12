@@ -217,6 +217,12 @@ export const ProfilePage: React.FC = () => {
               <span className="text-gray-400">Email Address:</span>
               <span className="text-white">{user.email}</span>
             </div>
+            {(user as any).ff_id && (
+              <div className="flex justify-between">
+                <span className="text-gray-400">Free Fire ID:</span>
+                <span className="text-white">{(user as any).ff_id}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-gray-400">Member Since:</span>
               <span className="text-white">

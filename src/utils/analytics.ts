@@ -228,3 +228,4 @@ export const formatDate = (dateString: string, range: 'daily' | 'weekly' | 'mont
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+

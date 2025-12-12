@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User as FirebaseUser, onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, firestore } from '../services/firebaseService';
 import { User } from '../types';
+import toast from 'react-hot-toast';
 
 // Get API key to check if Auth should be initialized
 const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
@@ -71,6 +72,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               ? userData.updated_at
               : (userData.updated_at as any)?.toDate?.() || new Date(),
         };
+        
+        // Check if user is inactive and logout if so
+        if (!user.is_active) {
+          console.log('User is inactive, logging out...');
+          await logout();
+          toast.error('Your account has been deactivated. Please contact support.');
+          return null;
+        }
+        
         setUser(user);
         // Store email in localStorage for persistence
         localStorage.setItem(AUTH_STORAGE_KEY, normalizedEmail);
@@ -130,6 +140,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const restoredUser = await fetchUserData(storedEmail);
           if (restoredUser && isMounted) {
             console.log('AuthContext: User restored successfully');
+            
             setIsLoading(false);
             return;
           } else if (isMounted) {
@@ -229,10 +240,104 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
+  // Separate useEffect to monitor user status in real-time
+  useEffect(() => {
+    if (!user?.email || isAdmin) {
+      // Don't monitor status for admin users or when no user is logged in
+      return;
+    }
+
+    const normalizedEmail = user.email.toLowerCase().trim();
+    let isMounted = true;
+
+    console.log('AuthContext: Setting up user status listener for:', normalizedEmail);
+
+    const unsubscribe = onSnapshot(
+      doc(firestore, 'users', normalizedEmail),
+      async (docSnapshot) => {
+        if (!isMounted) return;
+
+        if (docSnapshot.exists()) {
+          const userData = docSnapshot.data() as User;
+          const isActive = userData.is_active ?? true;
+
+          // If user becomes inactive, logout immediately
+          if (!isActive) {
+            console.log('AuthContext: User status changed to inactive, logging out...');
+            isMounted = false;
+            unsubscribe();
+            
+            // Clear auth state
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+            setUser(null);
+            setFirebaseUser(null);
+            setIsAdmin(false);
+            
+            // Sign out from Firebase Auth if needed
+            if (auth?.currentUser) {
+              try {
+                await auth.signOut();
+              } catch (error) {
+                console.warn('Error signing out from Firebase Auth:', error);
+              }
+            }
+            
+            toast.error('Your account has been deactivated. Please contact support.');
+          } else {
+            // Update user data if status is still active
+            const updatedUser: User = {
+              ...userData,
+              created_at:
+                userData.created_at instanceof Date
+                  ? userData.created_at
+                  : (userData.created_at as any)?.toDate?.() || new Date(),
+              updated_at:
+                userData.updated_at instanceof Date
+                  ? userData.updated_at
+                  : (userData.updated_at as any)?.toDate?.() || new Date(),
+            };
+            setUser(updatedUser);
+          }
+        } else {
+          // User document deleted - logout
+          console.log('AuthContext: User document deleted, logging out...');
+          isMounted = false;
+          unsubscribe();
+          
+          // Clear auth state
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+          setUser(null);
+          setFirebaseUser(null);
+          setIsAdmin(false);
+          
+          // Sign out from Firebase Auth if needed
+          if (auth?.currentUser) {
+            try {
+              await auth.signOut();
+            } catch (error) {
+              console.warn('Error signing out from Firebase Auth:', error);
+            }
+          }
+          
+          toast.error('Your account has been removed.');
+        }
+      },
+      (error) => {
+        console.error('AuthContext: Error listening to user status:', error);
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [user?.email, isAdmin]);
+
   const login = async (email: string) => {
     // After OTP verification, fetch user data
     // User document should already be created in useOTP hook
     await fetchUserData(email);
+    // The useEffect will automatically set up the real-time listener
   };
 
   const adminLogin = async (email: string, password: string) => {

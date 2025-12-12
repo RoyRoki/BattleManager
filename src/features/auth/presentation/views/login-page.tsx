@@ -326,7 +326,7 @@ export const LoginPage: React.FC = () => {
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Uppercase, lowercase, and number required
+                  Minimum 3 characters
                 </p>
               </div>
 
@@ -451,7 +451,7 @@ export const LoginPage: React.FC = () => {
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Uppercase, lowercase, and number required
+                  Minimum 3 characters
                 </p>
               </div>
 
