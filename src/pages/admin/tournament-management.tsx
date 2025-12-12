@@ -838,6 +838,7 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
   const [saving, setSaving] = useState(false);
   const [paying, setPaying] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [originalOrder, setOriginalOrder] = useState<string[]>([]);
   const { addPoints } = useFirestoreTransaction();
   const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'admin@battlemanager.com';
 
@@ -878,13 +879,25 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       );
     }
 
-    // Sort by kills (highest first)
-    return filtered.sort((a, b) => {
-      const killsA = killCounts[a.email] ?? a.existingKills;
-      const killsB = killCounts[b.email] ?? b.existingKills;
-      return killsB - killsA;
-    });
-  }, [users, tournament.id, tournament.player_kills, killCounts, searchQuery, customCredits]);
+    // Only sort by kills if there are no unsaved changes
+    // During editing, maintain the original order
+    if (hasChanges && originalOrder.length > 0) {
+      // Maintain original order during editing
+      const orderMap = new Map(originalOrder.map((email, index) => [email, index]));
+      return filtered.sort((a, b) => {
+        const orderA = orderMap.get(a.email) ?? Infinity;
+        const orderB = orderMap.get(b.email) ?? Infinity;
+        return orderA - orderB;
+      });
+    } else {
+      // Sort by kills (highest first) when no changes or after save
+      return filtered.sort((a, b) => {
+        const killsA = killCounts[a.email] ?? a.existingKills;
+        const killsB = killCounts[b.email] ?? b.existingKills;
+        return killsB - killsA;
+      });
+    }
+  }, [users, tournament.id, tournament.player_kills, killCounts, searchQuery, customCredits, hasChanges, originalOrder]);
 
   // Initialize kill counts and custom credits from existing data
   React.useEffect(() => {
@@ -905,6 +918,28 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
       setPointsPerKill(tournament.payment_info.points_per_kill);
     }
   }, [tournament.player_kills, tournament.payment_info, tournament.per_kill_point]);
+
+  // Store original order when component loads or when tournament data changes
+  React.useEffect(() => {
+    if (users?.docs && tournament.player_kills) {
+      const enrolled = users.docs
+        .filter((doc) => {
+          const data = doc.data();
+          return data.enrolled_tournaments?.includes(tournament.id);
+        })
+        .map((doc) => {
+          const data = doc.data();
+          const userEmail = doc.id.toLowerCase().trim();
+          const existingKills = tournament.player_kills?.[userEmail]?.kills || 0;
+          return { email: userEmail, kills: existingKills };
+        })
+        // Sort by kills to get the initial order
+        .sort((a, b) => b.kills - a.kills)
+        .map((user) => user.email);
+      
+      setOriginalOrder(enrolled);
+    }
+  }, [users, tournament.id, tournament.player_kills]);
 
   const handleKillChange = (email: string, kills: number) => {
     setKillCounts((prev) => ({
@@ -1047,6 +1082,7 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
 
       toast.success('Kill list updated successfully!');
       setHasChanges(false);
+      // The originalOrder will be recalculated when tournament data updates
     } catch (error) {
       console.error('Error saving kill list:', error);
       toast.error('Failed to save kill list');
