@@ -928,7 +928,6 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
           return data.enrolled_tournaments?.includes(tournament.id);
         })
         .map((doc) => {
-          const data = doc.data();
           const userEmail = doc.id.toLowerCase().trim();
           const existingKills = tournament.player_kills?.[userEmail]?.kills || 0;
           return { email: userEmail, kills: existingKills };
