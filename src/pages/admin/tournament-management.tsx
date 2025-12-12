@@ -9,7 +9,7 @@ import { useFirestoreTransaction } from '../../hooks/useFirestoreTransaction';
 import { getSuggestedTournamentStatus } from '../../utils/dateUtils';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HiX, HiUsers, HiFilter, HiExclamationCircle, HiClipboardCopy, HiLink, HiChevronDown, HiCheck, HiOutlineFire, HiEye, HiEyeOff, HiSearch, HiCurrencyDollar, HiLockClosed } from 'react-icons/hi';
+import { HiX, HiUsers, HiFilter, HiExclamationCircle, HiClipboardCopy, HiLink, HiChevronDown, HiCheck, HiOutlineFire, HiEye, HiEyeOff, HiSearch, HiCurrencyDollar } from 'react-icons/hi';
 import { getUserFriendlyError } from '../../shared/utils/errorHandler';
 
 export const TournamentManagement: React.FC = () => {
@@ -907,15 +907,10 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
   }, [tournament.player_kills, tournament.payment_info, tournament.per_kill_point]);
 
   const handleKillChange = (email: string, kills: number) => {
-    // Check if payment has been made
-    if (tournament.payment_info?.paid_at) {
-      toast.error('Cannot edit kill list after payment has been made!');
-      return;
-    }
-      setKillCounts((prev) => ({
-        ...prev,
-        [email]: Math.max(0, kills),
-      }));
+    setKillCounts((prev) => ({
+      ...prev,
+      [email]: Math.max(0, kills),
+    }));
     setHasChanges(true);
   };
 
@@ -928,12 +923,6 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
     const user = enrolledUsers.find((u) => u.email === email);
     if (!user) {
       toast.error('User not found');
-      return;
-    }
-
-    // Check if payment has been made
-    if (tournament.payment_info?.paid_at) {
-      toast.error('Cannot credit points after payment has been made!');
       return;
     }
 
@@ -1021,12 +1010,6 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
   };
 
   const handleSave = async () => {
-    // Check if payment has been made
-    if (tournament.payment_info?.paid_at) {
-      toast.error('Cannot edit kill list after payment has been made!');
-      return;
-    }
-
     setSaving(true);
     try {
       const playerKills: Record<string, PlayerKill> = {};
@@ -1342,9 +1325,6 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
     }, 0);
   }, [enrolledUsers, killCounts, pointsPerKill, customCredits]);
 
-  const isPaymentMade = !!tournament.payment_info?.paid_at;
-  const isLocked = isPaymentMade && hasChanges;
-
   return (
     <div className="fixed inset-0 bg-bg z-50 overflow-hidden flex flex-col">
       <div className="container mx-auto px-4 py-4 md:py-6 flex-1 flex flex-col overflow-hidden">
@@ -1365,29 +1345,6 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
           </button>
         </div>
 
-        {/* Warning if payment made */}
-        {isPaymentMade && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-6 flex items-center gap-3"
-          >
-            <HiExclamationCircle className="w-6 h-6 text-yellow-400 flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-yellow-300 font-heading">Payment Already Made</p>
-              <p className="text-yellow-400 text-sm mt-1">
-                Points have been credited. Editing kill list is disabled to prevent conflicts.
-                {isLocked && (
-                  <span className="block mt-2 text-red-400">
-                    <HiLockClosed className="inline w-4 h-4 mr-1" />
-                    You have unsaved changes. Please discard changes or contact support.
-                  </span>
-                )}
-              </p>
-            </div>
-          </motion.div>
-        )}
-
         {/* Stats and Controls Bar */}
         <div className="bg-bg-secondary border border-gray-800 rounded-lg p-3 md:p-4 mb-4 md:mb-6 flex-shrink-0">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-3 md:mb-4">
@@ -1405,8 +1362,7 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
                 type="number"
                 value={pointsPerKill}
                 onChange={(e) => setPointsPerKill(Math.max(0, parseInt(e.target.value) || 0))}
-                disabled={isPaymentMade}
-                className="w-full bg-bg border border-gray-700 rounded px-2 py-1 text-primary font-heading focus:outline-none focus:border-primary disabled:opacity-50"
+                className="w-full bg-bg border border-gray-700 rounded px-2 py-1 text-primary font-heading focus:outline-none focus:border-primary"
                 min="0"
               />
             </div>
@@ -1433,9 +1389,9 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
         <div className="flex gap-2 mb-4 md:mb-6 flex-wrap flex-shrink-0">
           <button
             onClick={handleSave}
-            disabled={saving || !hasChanges || isPaymentMade}
+            disabled={saving || !hasChanges}
             className={`px-6 py-2 rounded-lg font-heading transition flex items-center gap-2 ${
-              hasChanges && !isPaymentMade
+              hasChanges
                 ? 'bg-orange-500 text-white hover:bg-orange-600'
                 : 'bg-gray-700 text-gray-400 cursor-not-allowed'
             }`}
@@ -1454,9 +1410,9 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
           </button>
           <button
             onClick={handlePayAll}
-            disabled={paying || isPaymentMade || totalPointsToPay === 0}
+            disabled={paying || totalPointsToPay === 0}
             className={`px-6 py-2 rounded-lg font-heading transition flex items-center gap-2 ${
-              !isPaymentMade && totalPointsToPay > 0
+              totalPointsToPay > 0
                 ? 'bg-green-600 text-white hover:bg-green-700'
                 : 'bg-gray-700 text-gray-400 cursor-not-allowed'
             }`}
@@ -1523,8 +1479,7 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleKillChange(user.email, currentKills - 1)}
-                            disabled={isPaymentMade}
-                            className="w-7 h-7 md:w-8 md:h-8 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-white transition text-sm md:text-base"
+                            className="w-7 h-7 md:w-8 md:h-8 rounded bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white transition text-sm md:text-base"
                           >
                             -
                           </button>
@@ -1532,14 +1487,12 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
                             type="number"
                             value={currentKills}
                             onChange={(e) => handleKillChange(user.email, parseInt(e.target.value) || 0)}
-                            disabled={isPaymentMade}
-                            className="w-12 md:w-16 h-7 md:h-8 text-center bg-bg border border-gray-600 rounded text-orange-400 font-heading text-sm md:text-base focus:outline-none focus:border-orange-500 disabled:opacity-50"
+                            className="w-12 md:w-16 h-7 md:h-8 text-center bg-bg border border-gray-600 rounded text-orange-400 font-heading text-sm md:text-base focus:outline-none focus:border-orange-500"
                             min="0"
                           />
                           <button
                             onClick={() => handleKillChange(user.email, currentKills + 1)}
-                            disabled={isPaymentMade}
-                            className="w-7 h-7 md:w-8 md:h-8 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-white transition text-sm md:text-base"
+                            className="w-7 h-7 md:w-8 md:h-8 rounded bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white transition text-sm md:text-base"
                           >
                             +
                           </button>
@@ -1572,8 +1525,7 @@ const KillListPage: React.FC<KillListPageProps> = ({ tournament, onClose }) => {
                               setShowCustomCreditModal(user.email);
                               setCustomCreditAmount(customCredits[user.email]?.toString() || '');
                             }}
-                            disabled={isPaymentMade}
-                            className="px-2 md:px-3 py-1 md:py-1.5 bg-purple-600 text-white rounded text-xs md:text-sm font-heading hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                            className="px-2 md:px-3 py-1 md:py-1.5 bg-purple-600 text-white rounded text-xs md:text-sm font-heading hover:bg-purple-700 transition"
                             title="Set custom point credit (hidden option)"
                           >
                             Custom
