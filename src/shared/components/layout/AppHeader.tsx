@@ -65,7 +65,7 @@ export const AppHeader: React.FC = () => {
               transition={{ duration: 0.3, delay: 0.1 }}
               className="flex items-center gap-2"
             >
-              <span className="text-sm font-heading text-gray-400">Total Points</span>
+              <span className="text-sm font-heading font-bold text-primary text-glow">Total Points</span>
               <motion.div
                 animate={{
                   rotate: [0, 10, -10, 10, 0],
@@ -77,11 +77,11 @@ export const AppHeader: React.FC = () => {
                   repeatDelay: 3,
                   ease: "easeInOut"
                 }}
-                className="flex items-center justify-center"
+                className="flex items-center justify-center filter drop-shadow-[0_0_8px_#FFBA00]"
               >
-                <GiTwoCoins className="w-6 h-6 text-yellow-400" />
+                <GiTwoCoins className="w-6 h-6 text-primary" />
               </motion.div>
-              <span className="text-lg font-heading font-bold text-yellow-400">
+              <span className="text-lg font-heading font-bold text-primary text-glow">
                 {user.points.toLocaleString()}
               </span>
             </motion.div>
