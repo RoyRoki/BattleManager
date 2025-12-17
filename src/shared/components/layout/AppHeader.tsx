@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { HiDownload } from 'react-icons/hi';
 import { TbBrandAndroid } from 'react-icons/tb';
+import { GiTwoCoins } from 'react-icons/gi';
 import { ROUTES } from '../../../utils/constants';
 import { useAppSettings } from '../../../hooks/useAppSettings';
+import { useAuth } from '../../../contexts/AuthContext';
 
 // Default fallback URL if settings are not configured
 const DEFAULT_APK_DOWNLOAD_URL = 'https://drive.google.com/uc?export=download&id=1sWCpFTUsfhjBJnOPigZ4KbPWL8u2fKPH';
@@ -21,7 +23,8 @@ const handleDownloadAPK = (url: string) => {
 
 export const AppHeader: React.FC = () => {
   const { apkDownloadUrl, loading } = useAppSettings();
-  
+  const { user } = useAuth();
+
   // Use URL from settings if available, otherwise fall back to default
   const downloadUrl = apkDownloadUrl || DEFAULT_APK_DOWNLOAD_URL;
 
@@ -42,11 +45,47 @@ export const AppHeader: React.FC = () => {
                 alt="BattleManager Logo"
                 className="w-10 h-10 rounded-lg object-contain"
               />
-              <span className="text-xl font-heading font-bold text-primary text-glow">
+              {/* Full text on larger screens */}
+              <span className="hidden md:block text-xl font-heading font-bold text-primary text-glow">
                 BattleManager
               </span>
+              {/* Truncated text on medium screens */}
+              <span className="hidden sm:block md:hidden text-xl font-heading font-bold text-primary text-glow">
+                BattleMana...
+              </span>
+              {/* Hidden on small screens - only logo shows */}
             </motion.div>
           </Link>
+
+          {/* Total Points Display */}
+          {user && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+              className="flex items-center gap-2"
+            >
+              <span className="text-sm font-heading text-gray-400">Total Points</span>
+              <motion.div
+                animate={{
+                  rotate: [0, 10, -10, 10, 0],
+                  scale: [1, 1.1, 1, 1.1, 1]
+                }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  repeatDelay: 3,
+                  ease: "easeInOut"
+                }}
+                className="flex items-center justify-center"
+              >
+                <GiTwoCoins className="w-6 h-6 text-yellow-400" />
+              </motion.div>
+              <span className="text-lg font-heading font-bold text-yellow-400">
+                {user.points.toLocaleString()}
+              </span>
+            </motion.div>
+          )}
 
           {/* Download Android App Button */}
           <motion.button
@@ -57,14 +96,14 @@ export const AppHeader: React.FC = () => {
             transition={{ duration: 0.3, delay: 0.1 }}
             onClick={() => handleDownloadAPK(downloadUrl)}
             disabled={loading}
-            className="flex items-center gap-2 px-3 py-2 bg-transparent border-2 border-gray-600 rounded-lg hover:border-primary hover:bg-gray-800/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Download Android App"
           >
             <motion.div
-              animate={{ 
+              animate={{
                 rotate: [0, -10, 10, -10, 0],
               }}
-              transition={{ 
+              transition={{
                 duration: 2,
                 repeat: Infinity,
                 repeatDelay: 3,
@@ -72,13 +111,13 @@ export const AppHeader: React.FC = () => {
               }}
               className="flex items-center justify-center"
             >
-              <TbBrandAndroid className="w-6 h-6 text-white" />
+              <TbBrandAndroid className="w-6 h-6 text-yellow-400" />
             </motion.div>
             <motion.div
-              animate={{ 
+              animate={{
                 y: [0, -3, 0],
               }}
-              transition={{ 
+              transition={{
                 duration: 1.5,
                 repeat: Infinity,
                 repeatDelay: 2,
@@ -86,7 +125,7 @@ export const AppHeader: React.FC = () => {
               }}
               className="flex items-center justify-center"
             >
-              <HiDownload className="w-5 h-5 text-white" />
+              <HiDownload className="w-5 h-5 text-yellow-400" />
             </motion.div>
           </motion.button>
         </div>
