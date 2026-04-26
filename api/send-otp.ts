@@ -1,5 +1,7 @@
-// Vercel serverless function for sending OTP via BREVO SMTP
+// Vercel serverless function for sending OTP via SMTP
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+// import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getDatabase, Database } from 'firebase-admin/database';
 
@@ -277,59 +279,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return map[char] || char;
     });
 
-    // Helper function to get BREVO API key with fallback support
-  const getBrevoKey = (): string | null => {
+    // Helper function to get Resend API key with fallback support
+    const getResendKey = (): string | null => {
     // Try keys in priority order
     const keyCandidates = [
-      process.env.VERCEL_BREVO_KEY,
-      process.env.VERCEL_BREVO_KEY_FALLBACK_1,
-      process.env.VERCEL_BREVO_KEY_FALLBACK_2,
-      process.env.BREVO_KEY,
-      process.env.BREVO_API_KEY,
-      process.env.VERCEL_BREVO_KEY_FALLBACK_3,
+      process.env.VERCEL_RESEND_API_KEY,
+      process.env.RESEND_API_KEY,
     ];
 
     for (let i = 0; i < keyCandidates.length; i++) {
       const key = keyCandidates[i];
       if (key && key.trim() !== '') {
-        const sourceName = i === 0 ? 'VERCEL_BREVO_KEY' : 
-                          i === 1 ? 'VERCEL_BREVO_KEY_FALLBACK_1' : 
-                          i === 2 ? 'VERCEL_BREVO_KEY_FALLBACK_2' : 
-                          i === 3 ? 'BREVO_KEY' : 
-                          i === 4 ? 'BREVO_API_KEY' : 
-                          'VERCEL_BREVO_KEY_FALLBACK_3';
-        console.log(`send-otp: Using BREVO key from source ${sourceName}`);
+        const sourceName = i === 0 ? 'VERCEL_RESEND_API_KEY' : 'RESEND_API_KEY';
+        console.log(`send-otp: Using Resend key from source ${sourceName}`);
         return key.trim();
       }
     }
     return null;
   };
 
-  // Note: BREVO API v3 uses the same API key (xkeysib) for both API and SMTP
-  // No separate SMTP key needed - we use the same BREVO_KEY
-
-    const BREVO_KEY = getBrevoKey();
+    const RESEND_API_KEY = getResendKey();
     const OTP_EXPIRY_MINUTES = 5;
 
     // Debug logging
     console.log('send-otp: Environment check:', {
     NODE_ENV: process.env.NODE_ENV,
-    hasBrevoKey: !!BREVO_KEY,
-    apiKeyPrefix: BREVO_KEY ? BREVO_KEY.substring(0, 10) + '...' : 'NOT SET',
-    hasFallback1: !!process.env.VERCEL_BREVO_KEY_FALLBACK_1,
-    hasFallback2: !!process.env.VERCEL_BREVO_KEY_FALLBACK_2,
+    hasResendKey: !!RESEND_API_KEY,
+    apiKeyPrefix: RESEND_API_KEY ? RESEND_API_KEY.substring(0, 10) + '...' : 'NOT SET',
     email: normalizedEmail,
   });
 
-    // Check for BREVO API keys with fallback support
-    if (!BREVO_KEY) {
-      console.error('send-otp: Missing BREVO API key in all fallback sources');
+    // Check for Resend API keys
+    if (!RESEND_API_KEY) {
+      console.error('send-otp: Missing RESEND_API_KEY');
       console.error('send-otp: Checked keys:', {
-        VERCEL_BREVO_KEY: !!process.env.VERCEL_BREVO_KEY,
-        VERCEL_BREVO_KEY_FALLBACK_1: !!process.env.VERCEL_BREVO_KEY_FALLBACK_1,
-        VERCEL_BREVO_KEY_FALLBACK_2: !!process.env.VERCEL_BREVO_KEY_FALLBACK_2,
-        BREVO_KEY: !!process.env.BREVO_KEY,
-        BREVO_API_KEY: !!process.env.BREVO_API_KEY,
+        VERCEL_RESEND_API_KEY: !!process.env.VERCEL_RESEND_API_KEY,
+        RESEND_API_KEY: !!process.env.RESEND_API_KEY,
       });
       return res.status(500).json({ 
         success: false,
@@ -338,131 +323,125 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-    // Generate secure random 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiryTime = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
-
-    // Store OTP in Firebase Realtime Database before sending email
-    // This ensures OTP is stored even if email fails, but we'll clean it up on failure
-    let otpStored = false;
-    let otpRef: any = null;
-    try {
-      // Ensure Firebase is properly initialized
-      console.log('send-otp: Ensuring Firebase Admin is initialized');
-      const { db } = ensureFirebaseInitialized();
-
-      console.log('send-otp: Attempting to store OTP in Firebase at path: otps/' + encodedEmail);
-      otpRef = db.ref(`otps/${encodedEmail}`);
+      console.log('send-otp: Starting OTP flow for:', normalizedEmail);
       
-      // Use a transaction-like approach with retry logic
-      const MAX_RETRIES = 3;
-      let retryCount = 0;
-      let stored = false;
-      
-      while (!stored && retryCount < MAX_RETRIES) {
-        try {
-          await otpRef.set({
-            otp: otp,
-            createdAt: Date.now(),
-            expiresAt: expiryTime,
-            attempts: 0,
-          });
-          stored = true;
-          otpStored = true;
-          console.log('send-otp: OTP stored successfully in Firebase for email:', normalizedEmail);
-        } catch (setError: any) {
-          retryCount++;
-          if (retryCount >= MAX_RETRIES) {
-            throw setError;
+      // Generate secure random 6-digit OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      console.log('send-otp: OTP generated:', otp);
+      const expiryTime = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
+
+      // Store OTP in Firebase Realtime Database before sending email
+      let otpStored = false;
+      let otpRef: any = null;
+      try {
+        // Ensure Firebase is properly initialized
+        console.log('send-otp: Ensuring Firebase Admin is initialized');
+        const { db } = ensureFirebaseInitialized();
+        console.log('send-otp: Firebase initialized');
+
+        console.log('send-otp: Attempting to store OTP in Firebase at path: otps/' + encodedEmail);
+        otpRef = db.ref(`otps/${encodedEmail}`);
+        
+        // Use a transaction-like approach with retry logic
+        const MAX_RETRIES = 3;
+        let retryCount = 0;
+        let stored = false;
+        
+        while (!stored && retryCount < MAX_RETRIES) {
+          try {
+            await otpRef.set({
+              otp: otp,
+              createdAt: Date.now(),
+              expiresAt: expiryTime,
+              attempts: 0,
+            });
+            stored = true;
+            otpStored = true;
+            console.log('send-otp: OTP stored successfully in Firebase for email:', normalizedEmail);
+          } catch (setError: any) {
+            retryCount++;
+            if (retryCount >= MAX_RETRIES) {
+              throw setError;
+            }
+            const backoffMs = Math.pow(2, retryCount) * 100;
+            console.warn(`send-otp: OTP storage attempt ${retryCount} failed, retrying in ${backoffMs}ms:`, setError.message);
+            await new Promise(resolve => setTimeout(resolve, backoffMs));
           }
-          // Wait before retry (exponential backoff)
-          const backoffMs = Math.pow(2, retryCount) * 100;
-          console.warn(`send-otp: OTP storage attempt ${retryCount} failed, retrying in ${backoffMs}ms:`, setError.message);
-          await new Promise(resolve => setTimeout(resolve, backoffMs));
         }
+
+        // Auto-delete OTP after expiry
+        setTimeout(async () => {
+          try {
+            if (otpRef) {
+              await otpRef.remove();
+              console.log('send-otp: Expired OTP cleaned up for email:', normalizedEmail);
+            }
+          } catch (err) {
+            console.error('send-otp: Error deleting expired OTP:', err);
+          }
+        }, OTP_EXPIRY_MINUTES * 60 * 1000);
+
+      } catch (firebaseError: any) {
+        const errorDetails = {
+          message: firebaseError.message,
+          code: firebaseError.code,
+          name: firebaseError.name,
+          stack: firebaseError.stack?.substring(0, 500),
+          databaseURL: process.env.FIREBASE_DATABASE_URL ? 'SET' : 'NOT SET',
+          hasAdminSDK: !!process.env.FIREBASE_ADMIN_SDK,
+          adminSDKLength: process.env.FIREBASE_ADMIN_SDK?.length || 0,
+          appsInitialized: getApps().length,
+          errorType: firebaseError.constructor?.name || 'Unknown',
+        };
+        
+        console.error('send-otp: Firebase storage error:', firebaseError);
+        console.error('send-otp: Firebase error details:', JSON.stringify(errorDetails, null, 2));
+        
+        let errorMessage = 'Failed to store OTP. Please try again.';
+        let errorCode = 'STORAGE_ERROR';
+        
+        if (firebaseError.message?.includes('FIREBASE_ADMIN_SDK') || 
+            firebaseError.message?.includes('environment variable not set')) {
+          errorMessage = 'Firebase configuration error. Please contact support.';
+          errorCode = 'CONFIG_ERROR';
+        } else if (firebaseError.message?.includes('FIREBASE_DATABASE_URL') || 
+                   firebaseError.message?.includes('Database')) {
+          errorMessage = 'Database configuration error. Please contact support.';
+          errorCode = 'DATABASE_CONFIG_ERROR';
+        } else if (firebaseError.code === 'PERMISSION_DENIED' || 
+                   firebaseError.code === 'permission-denied' ||
+                   firebaseError.message?.includes('permission')) {
+          errorMessage = 'Database permission denied. Please contact support.';
+          errorCode = 'PERMISSION_ERROR';
+        } else if (firebaseError.code === 'UNAVAILABLE' || 
+                   firebaseError.message?.includes('unavailable') ||
+                   firebaseError.message?.includes('network')) {
+          errorMessage = 'Database temporarily unavailable. Please try again.';
+          errorCode = 'UNAVAILABLE_ERROR';
+        } else if (firebaseError.message?.includes('initialization') ||
+                   firebaseError.message?.includes('initialize')) {
+          errorMessage = 'Firebase initialization error. Please contact support.';
+          errorCode = 'INIT_ERROR';
+        }
+        
+        return res.status(500).json({
+          success: false,
+          error: errorMessage,
+          errorCode: errorCode,
+          details: {
+            code: firebaseError.code || 'UNKNOWN',
+            type: errorCode,
+            message: (process.env.NODE_ENV === 'development' || 
+                     errorCode === 'UNAVAILABLE_ERROR' || 
+                     errorCode === 'PERMISSION_ERROR') 
+                     ? firebaseError.message : undefined,
+          },
+        });
       }
 
-      // Auto-delete OTP after expiry
-      setTimeout(async () => {
-        try {
-          if (otpRef) {
-            await otpRef.remove();
-            console.log('send-otp: Expired OTP cleaned up for email:', normalizedEmail);
-          }
-        } catch (err) {
-          console.error('send-otp: Error deleting expired OTP:', err);
-        }
-      }, OTP_EXPIRY_MINUTES * 60 * 1000);
+      console.log('send-otp: Sending email via SMTP...');
 
-    } catch (firebaseError: any) {
-      // Log comprehensive error details
-      const errorDetails = {
-        message: firebaseError.message,
-        code: firebaseError.code,
-        name: firebaseError.name,
-        stack: firebaseError.stack?.substring(0, 500), // Limit stack trace length
-        databaseURL: process.env.FIREBASE_DATABASE_URL ? 'SET' : 'NOT SET',
-        hasAdminSDK: !!process.env.FIREBASE_ADMIN_SDK,
-        adminSDKLength: process.env.FIREBASE_ADMIN_SDK?.length || 0,
-        appsInitialized: getApps().length,
-        errorType: firebaseError.constructor?.name || 'Unknown',
-      };
-      
-      console.error('send-otp: Firebase storage error:', firebaseError);
-      console.error('send-otp: Firebase error details:', JSON.stringify(errorDetails, null, 2));
-      
-      // Provide more specific error messages based on error type
-      let errorMessage = 'Failed to store OTP. Please try again.';
-      let errorCode = 'STORAGE_ERROR';
-      
-      if (firebaseError.message?.includes('FIREBASE_ADMIN_SDK') || 
-          firebaseError.message?.includes('environment variable not set')) {
-        errorMessage = 'Firebase configuration error. Please contact support.';
-        errorCode = 'CONFIG_ERROR';
-      } else if (firebaseError.message?.includes('FIREBASE_DATABASE_URL') || 
-                 firebaseError.message?.includes('Database')) {
-        errorMessage = 'Database configuration error. Please contact support.';
-        errorCode = 'DATABASE_CONFIG_ERROR';
-      } else if (firebaseError.code === 'PERMISSION_DENIED' || 
-                 firebaseError.code === 'permission-denied' ||
-                 firebaseError.message?.includes('permission')) {
-        errorMessage = 'Database permission denied. Please contact support.';
-        errorCode = 'PERMISSION_ERROR';
-      } else if (firebaseError.code === 'UNAVAILABLE' || 
-                 firebaseError.message?.includes('unavailable') ||
-                 firebaseError.message?.includes('network')) {
-        errorMessage = 'Database temporarily unavailable. Please try again.';
-        errorCode = 'UNAVAILABLE_ERROR';
-      } else if (firebaseError.message?.includes('initialization') ||
-                 firebaseError.message?.includes('initialize')) {
-        errorMessage = 'Firebase initialization error. Please contact support.';
-        errorCode = 'INIT_ERROR';
-      }
-      
-      // Return error with sanitized details for production debugging
-      return res.status(500).json({
-        success: false,
-        error: errorMessage,
-        errorCode: errorCode,
-        // Include sanitized error details in production for debugging
-        details: {
-          code: firebaseError.code || 'UNKNOWN',
-          type: errorCode,
-          // Only include message in development or if it's a known safe error
-          message: (process.env.NODE_ENV === 'development' || 
-                   errorCode === 'UNAVAILABLE_ERROR' || 
-                   errorCode === 'PERMISSION_ERROR') 
-                   ? firebaseError.message : undefined,
-        },
-      });
-    }
-
-    // Send OTP via BREVO Transactional Email API with fallback key support
-    let emailData: any;
-    let emailResponse: Response | null = null;
-    
-    // Function to try sending email with a specific key
-    const trySendEmail = async (apiKey: string, keyName: string): Promise<{ response: Response; data: any }> => {
+      // Send OTP via SMTP
       const emailHtml = `
         <!DOCTYPE html>
         <html>
@@ -493,213 +472,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const emailText = `Your BattleManager OTP is: ${otp}\n\nThis OTP is valid for ${OTP_EXPIRY_MINUTES} minutes.\n\nDo not share this OTP with anyone.\n\nIf you didn't request this OTP, please ignore this email.`;
 
-      const emailPayload = {
-        sender: {
-          name: 'BattleManager',
-          email: 'battlemanagerofficial@gmail.com',
+      // SMTP configuration
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: 'newmove2030@gmail.com',
+          pass: 'vzowmfjiumdjeute',
         },
-        to: [
-          {
-            email: normalizedEmail,
-          },
-        ],
+      });
+
+      const mailOptions = {
+        from: 'BattleManager <newmove2030@gmail.com>',
+        to: normalizedEmail,
         subject: 'Your BattleManager OTP',
-        htmlContent: emailHtml,
-        textContent: emailText,
+        html: emailHtml,
+        text: emailText,
       };
 
-      console.log('send-otp: BREVO Email Request Details:', {
+      console.log('send-otp: SMTP Email Request Details:', {
         to: normalizedEmail,
-        subject: emailPayload.subject,
-        hasHtmlContent: !!emailPayload.htmlContent,
-        hasTextContent: !!emailPayload.textContent,
+        subject: mailOptions.subject,
       });
 
-      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'api-key': apiKey,
-        },
-        body: JSON.stringify(emailPayload),
-      });
+      const response = await transporter.sendMail(mailOptions);
 
-      const responseText = await response.text();
-      console.log(`send-otp: BREVO Raw Response (using ${keyName}):`, {
-        status: response.status,
-        statusText: response.statusText,
-        body: responseText,
-      });
-
-      if (!response.ok) {
-        const errorData = responseText ? JSON.parse(responseText) : {};
-        return { response, data: errorData };
-      }
-
-      let parsedData: any = {};
-      try {
-        parsedData = responseText ? JSON.parse(responseText) : {};
-      } catch (parseError) {
-        if (response.status === 201) {
-          parsedData = { success: true };
-        }
-      }
-
-      return { response, data: parsedData };
-    };
-
-    try {
-      // Try sending with primary key first
-      const allKeys = [
-        { key: BREVO_KEY, name: 'VERCEL_BREVO_KEY' },
-        { key: process.env.VERCEL_BREVO_KEY_FALLBACK_1, name: 'VERCEL_BREVO_KEY_FALLBACK_1' },
-        { key: process.env.VERCEL_BREVO_KEY_FALLBACK_2, name: 'VERCEL_BREVO_KEY_FALLBACK_2' },
-        { key: process.env.BREVO_KEY, name: 'BREVO_KEY' },
-        { key: process.env.BREVO_API_KEY, name: 'BREVO_API_KEY' },
-        { key: process.env.VERCEL_BREVO_KEY_FALLBACK_3, name: 'VERCEL_BREVO_KEY_FALLBACK_3' },
-      ].filter((k): k is { key: string; name: string } => !!k.key && k.key.trim() !== '');
-
-      console.log(`send-otp: Attempting to send email with ${allKeys.length} available key(s)`);
-
-      if (allKeys.length === 0) {
-        throw new Error('No BREVO API keys available');
-      }
-
-      let emailSent = false;
-      let lastError: any = null;
-
-      for (let i = 0; i < allKeys.length; i++) {
-        const { key, name } = allKeys[i];
-        
-        try {
-          console.log(`send-otp: Trying key ${i + 1}/${allKeys.length}: ${name}`);
-          const result = await trySendEmail(key, name);
-          emailResponse = result.response;
-          emailData = result.data;
-
-          if (emailResponse.ok || emailResponse.status === 201) {
-            console.log(`send-otp: Successfully sent email using ${name}`);
-            emailSent = true;
-            break;
-          } else if (emailResponse.status === 401) {
-            // Unauthorized - try next key
-            console.warn(`send-otp: Key ${name} returned 401 (unauthorized), trying next key...`);
-            lastError = new Error(`BREVO API error: ${emailResponse.status} - ${JSON.stringify(emailData)}`);
-            continue;
-          } else {
-            // Other error - throw immediately
-            throw new Error(`BREVO API error: ${emailResponse.status} - ${JSON.stringify(emailData)}`);
-          }
-        } catch (keyError: any) {
-          if (keyError.message?.includes('401') || keyError.message?.includes('unauthorized')) {
-            console.warn(`send-otp: Key ${name} failed with 401, trying next key...`);
-            lastError = keyError;
-            continue;
-          }
-          throw keyError;
-        }
-      }
-
-      if (!emailSent || !emailResponse) {
-        console.error('send-otp: All BREVO keys failed');
-        throw lastError || new Error('All BREVO API keys failed');
-      }
-
-      const responseText = emailResponse.status === 201 ? '{}' : JSON.stringify(emailData);
-      console.log('send-otp: BREVO Final Response:', {
-        status: emailResponse.status,
-        statusText: emailResponse.statusText,
-        body: responseText,
-      });
-
-      if (!emailResponse.ok && emailResponse.status !== 201) {
-        console.error('send-otp: BREVO API returned non-OK status:', {
-          status: emailResponse.status,
-          statusText: emailResponse.statusText,
-          body: responseText,
-        });
-        throw new Error(`BREVO API error: ${emailResponse.status} - ${responseText}`);
-      }
-
-      // emailData is already parsed in trySendEmail function
-      console.log('send-otp: BREVO Parsed Response:', JSON.stringify(emailData, null, 2));
-      
-      // Log important response fields
-      if (emailData.messageId) {
-        console.log('send-otp: BREVO Message ID:', emailData.messageId);
-      }
-
-      // Verify BREVO response
-      // BREVO returns 201 status on success
-      if (emailResponse && (emailResponse.status === 201 || emailData?.messageId)) {
-        console.log('send-otp: OTP sent successfully via BREVO');
-        console.log('send-otp: OTP details:', {
-          email: normalizedEmail,
-          messageId: emailData?.messageId || 'N/A',
-          otpGenerated: '***', // Don't log actual OTP
-        });
-        
-        return res.status(200).json({
-          success: true,
-          message: 'OTP sent successfully',
-          messageId: emailData?.messageId, // Return message ID for tracking
-        });
-      } else {
-        // BREVO returned failure or unexpected response
-        console.error('send-otp: BREVO returned failure or unexpected response:', emailData);
-        
-        // Clean up Firebase entry if email failed
-        if (otpStored && otpRef) {
-          try {
-            await otpRef.remove();
-            console.log('send-otp: Cleaned up OTP from Firebase after email failure');
-          } catch (err) {
-            console.error('send-otp: Error cleaning up OTP:', err);
-          }
-        }
-
-        const errorMessage = emailData?.message || emailData?.error || 'Failed to send OTP via email. Please check your BREVO account and API key.';
-        
-        return res.status(400).json({
-          success: false,
-          error: errorMessage,
-          details: {
-            brevoResponse: emailData,
-            suggestion: 'Please check: 1) BREVO account is active, 2) Email address is valid, 3) API key is valid, 4) Sender email is verified',
-          },
-        });
-      }
-    } catch (fetchError: any) {
-      console.error('send-otp: BREVO API call failed:', fetchError);
-      console.error('send-otp: Error details:', {
-        message: fetchError.message,
-        stack: fetchError.stack,
-        name: fetchError.name,
+      console.log('send-otp: SMTP Response:', response);
+      console.log('send-otp: OTP sent successfully via SMTP');
+      console.log('send-otp: OTP details:', {
+        email: normalizedEmail,
       });
       
-      // Clean up Firebase entry if email failed
-      if (otpStored && otpRef) {
-        try {
-          await otpRef.remove();
-          console.log('send-otp: Cleaned up OTP from Firebase after email failure');
-        } catch (err) {
-          console.error('send-otp: Error cleaning up OTP:', err);
-        }
-      }
-
-      return res.status(500).json({
-        success: false,
-        error: 'Unable to send verification code. Please try again in a moment.',
+      return res.status(200).json({
+        success: true,
+        message: 'OTP sent successfully',
       });
-    }
-    } catch (innerError: any) {
-      // Catch any errors from the try block that starts at line 368
-      // This includes OTP generation, Firebase storage, and BREVO email sending
-      console.error('send-otp: Error in OTP generation/sending process:', innerError);
-      throw innerError; // Re-throw to be caught by top-level catch
-    }
-  } catch (error: any) {
-    // This catch block handles any errors not caught by inner try-catch blocks
+    } catch (error: any) {
+    console.error('send-otp: Full error catch:', error);
     console.error('send-otp: Unexpected top-level error:', error);
     console.error('send-otp: Error details:', {
       message: error.message,

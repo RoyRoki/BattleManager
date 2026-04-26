@@ -28,22 +28,19 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Get email from command line
-const email = process.argv[2];
+// Get email or UID from command line
+const identifier = process.argv[2];
 
-if (!email) {
-  console.error('❌ Error: Email is required');
-  console.log('\nUsage: node scripts/setup-admin.js <email>');
-  console.log('Example: node scripts/setup-admin.js admin@battlemanager.com\n');
+if (!identifier) {
+  console.error('❌ Error: Email or UID is required');
+  console.log('\nUsage: node scripts/setup-admin.js <email-or-uid>');
+  console.log('Example: node scripts/setup-admin.js admin@battlemanager.com');
+  console.log('Example: node scripts/setup-admin.js zFQT8jYAsdVWvyYSs49L03XRmsW2\n');
   process.exit(1);
 }
 
-// Validate email format
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-if (!emailRegex.test(email)) {
-  console.error('❌ Error: Invalid email format');
-  process.exit(1);
-}
+// Detect if input is email or UID
+const isEmail = identifier.includes('@');
 
 // Try to find service account key
 const projectRoot = process.cwd();
@@ -85,11 +82,17 @@ try {
 
 // Set admin claim
 async function setupAdmin() {
+  let user;
   try {
-    console.log(`🔍 Looking up user: ${email}...`);
-    const user = await admin.auth().getUserByEmail(email);
+    if (isEmail) {
+      console.log(`🔍 Looking up user by email: ${identifier}...`);
+      user = await admin.auth().getUserByEmail(identifier);
+    } else {
+      console.log(`🔍 Looking up user by UID: ${identifier}...`);
+      user = await admin.auth().getUser(identifier);
+    }
     
-    console.log(`✅ User found: ${user.email} (UID: ${user.uid})`);
+    console.log(`✅ User found: ${user.email || 'No email'} (UID: ${user.uid})`);
     
     // Check current claims
     if (user.customClaims && user.customClaims.role === 'admin') {
@@ -109,7 +112,7 @@ async function setupAdmin() {
     
   } catch (error) {
     if (error.code === 'auth/user-not-found') {
-      console.error(`❌ User with email "${email}" not found in Firebase Authentication.`);
+      console.error(`❌ User with identifier "${identifier}" not found in Firebase Authentication.`);
       console.log('\nPlease create the user first:');
       console.log('1. Go to Firebase Console → Authentication → Users');
       console.log('2. Click "Add user"');
